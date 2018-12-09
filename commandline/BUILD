@@ -4,11 +4,11 @@
 
 cc_library(
     name = "iec_host_lib",
-    hdrs = [
-      "iec_host_lib.h",
-    ],
     srcs = [
-      "iec_host_lib.cc",
+        "iec_host_lib.cc",
+    ],
+    hdrs = [
+        "iec_host_lib.h",
     ],
 )
 
@@ -17,10 +17,10 @@ cc_library(
 cc_binary(
     name = "disccopy",
     srcs = [
-      "disccopy.cc",
+        "disccopy.cc",
     ],
     deps = [
-      ":iec_host_lib",
-      "@boost//:algorithm",
+        ":iec_host_lib",
+        "@boost//:algorithm",
     ],
 )

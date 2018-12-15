@@ -1,5 +1,5 @@
-#include <errno.h>
 #include <fcntl.h>
+#include <memory>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -9,31 +9,6 @@
 #include <unistd.h>
 
 #include "iec_host_lib.h"
-
-static void SetError(IECStatus::IECStatusCode status_code,
-                     const std::string& context, IECStatus* status) {
-  status->status_code = status_code;
-  switch (status_code) {
-    case IECStatus::OK:
-      status->message = "OK";
-      break;
-    case IECStatus::UNIMPLEMENTED:
-      status->message = "Unimplemented";
-      break;
-    case IECStatus::CONNECTION_FAILURE:
-      status->message = "Connection failure";
-      break;
-  }
-  if (!context.empty()) {
-    status->message = context + ": " + status->message;
-  }
-}
-
-static void SetErrorFromErrno(IECStatus::IECStatusCode status_code, const std::string& context,
-                              IECStatus* status) {
-  SetError(status_code, context, status);
-  status->message = status->message + ": " + strerror(errno);
-}
 
 IECBusConnection::IECBusConnection(int arduino_fd) : arduino_fd_(arduino_fd) {}
 
@@ -56,11 +31,20 @@ bool IECBusConnection::SendCommand(int device_number,
   return false;
 }
 
+bool IECBusConnection::Initialize(IECStatus* status) {
+  // const char kConnectionStringPrefix[] = "connect_arduino:";
+  return false;
+}
+
 IECBusConnection* IECBusConnection::Create(int arduino_fd, IECStatus* status) {
   if (arduino_fd == -1) {
     return nullptr;
   }
-  return new IECBusConnection(arduino_fd);
+  auto conn = std::make_unique<IECBusConnection>(arduino_fd);
+  if (!conn->Initialize(status)) {
+    return nullptr;
+  }
+  return conn.release();
 }
 
 IECBusConnection* IECBusConnection::Create(const std::string& device_file,
@@ -102,3 +86,4 @@ IECBusConnection* IECBusConnection::Create(const std::string& device_file,
   }
   return Create(fd, status);
 }
+

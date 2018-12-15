@@ -10,6 +10,30 @@ cc_library(
     hdrs = [
         "iec_host_lib.h",
     ],
+    deps = [
+        ":utils",
+    ],
+)
+
+cc_library(
+    name = "utils",
+    srcs = [
+        "utils.cc",
+    ],
+    hdrs = [
+        "utils.h",
+    ],
+)
+
+cc_test(
+    name = "utils_test",
+    srcs = [
+        "utils_test.cc",
+    ],
+    deps = [
+        ":utils",
+	"@com_github_google_googletest//:gtest_main",
+    ],
 )
 
 # A tool to copy a 1541 floppy disc to a .d64 image and vice

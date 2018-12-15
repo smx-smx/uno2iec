@@ -7,18 +7,17 @@
 
 #include <string>
 
-struct IECStatus {
-  enum IECStatusCode {
-    OK = 0x00,
-    UNIMPLEMENTED = 0x01,
-    CONNECTION_FAILURE = 0x02
-  };
-  IECStatusCode status_code;
-  std::string message;  // A status message describing the status.
-};
+#include "utils.h"
 
 class IECBusConnection {
  public:
+  // Instantiate an IECBusConnection object. The arduino_fd parameter is
+  // used to specify a file descriptor that will be used for bidirectional
+  // communication with an arduino connected to the IEC bus and speaking the
+  // uno2iec protocol. Use Create() methods below instead of instantiating
+  // directly!
+  IECBusConnection(int arduino_fd);
+
   // Reset the IEC bus by pulling the reset line to low. Returns true on
   // success. In case of an error, status will be set to an appropriate error
   // status.
@@ -47,12 +46,12 @@ class IECBusConnection {
   // Free resources such as any owned file descriptors.
   virtual ~IECBusConnection();
 
+  // Initialize the bus connection. To be called immediately after construction.
+  // Returns true if successful. In case of error, returns false and sets
+  // status.
+  bool Initialize(IECStatus* status);
+
  private:
-  // Instantiate an IECBusConnection object. The arduino_fd parameter is
-  // used to specify a file descriptor that will be used for bidirectional
-  // communication with an arduino connected to the IEC bus and speaking the
-  // uno2iec protocol.
-  IECBusConnection(int arduino_fd);
 
   // File descriptor used for communication.
   int arduino_fd_;

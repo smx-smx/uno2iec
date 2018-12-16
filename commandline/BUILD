@@ -12,6 +12,7 @@ cc_library(
     ],
     deps = [
         ":utils",
+        "@boost//:format",
     ],
 )
 
@@ -45,6 +46,6 @@ cc_binary(
     ],
     deps = [
         ":iec_host_lib",
-        "@boost//:algorithm",
+        "@boost//:program_options",
     ],
 )

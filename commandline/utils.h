@@ -29,14 +29,28 @@ void SetError(IECStatus::IECStatusCode status_code, const std::string& context,
 void SetErrorFromErrno(IECStatus::IECStatusCode status_code,
                        const std::string& context, IECStatus* status);
 
-// Reads up to max_length characters from fd until term_symbol is found and
-// set result to the read string (not including term_symbol). Returns true if
-// successful, sets status otherwise.
-bool ReadTerminatedString(int fd, char term_symbol, size_t max_length,
-                          std::string* result, IECStatus* status);
+// BufferedReadWriter can be used to read both terminated and fixed
+// character amounts from a file handle. It buffers reads internally,
+// writes are executed immediately. Note that file handle ownership is not
+// transferred. The handle will not be closed upon destruction of a
+// BufferedReadWriter.
+class BufferedReadWriter {
+ public:
+  BufferedReadWriter(int fd) : fd_(fd) {}
 
-// Writes the specified content to fd, with no terminator such as the null
-// character or newline. Returns true if successful, sets status otherwise.
-bool WriteString(int fd, const std::string& content, IECStatus* status);
+  // Reads up to max_length characters until term_symbol is found and set result
+  // to the read string (not including term_symbol). Returns true if successful,
+  // sets status otherwise.
+  bool ReadTerminatedString(char term_symbol, size_t max_length,
+                            std::string* result, IECStatus* status);
+
+  // Writes the specified content, with no terminator such as the null character
+  // or newline. Returns true if successful, sets status otherwise.
+  bool WriteString(const std::string& content, IECStatus* status);
+
+ private:
+  // File descriptor to read from.
+  int fd_;
+};
 
 #endif  // UTILS_H

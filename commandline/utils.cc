@@ -34,14 +34,16 @@ void SetErrorFromErrno(IECStatus::IECStatusCode status_code,
   status->message = status->message + ": " + strerror(errno);
 }
 
-bool ReadTerminatedString(int fd, char term_symbol, size_t max_length,
-                          std::string* result, IECStatus* status) {
+bool BufferedReadWriter::ReadTerminatedString(char term_symbol,
+                                              size_t max_length,
+                                              std::string* result,
+                                              IECStatus* status) {
   char buffer[kReadBufferSize];
   memset(buffer, 0, sizeof(buffer));
   result->clear();
   while (result->size() < max_length) {
-    ssize_t res =
-        read(fd, buffer, std::min(sizeof(buffer), max_length - result->size()));
+    ssize_t res = read(fd_, buffer,
+                       std::min(sizeof(buffer), max_length - result->size()));
     if (res == -1 && errno != EAGAIN && errno != EWOULDBLOCK) {
       SetErrorFromErrno(IECStatus::CONNECTION_FAILURE, "read", status);
       return false;
@@ -68,13 +70,14 @@ bool ReadTerminatedString(int fd, char term_symbol, size_t max_length,
   return false;
 }
 
-bool WriteString(int fd, const std::string& content, IECStatus* status) {
+bool BufferedReadWriter::WriteString(const std::string& content,
+                                     IECStatus* status) {
   if (content.empty()) {
     return true;
   }
   size_t pos = 0;
   while (pos < content.size()) {
-    ssize_t result = write(fd, &content.c_str()[pos], content.size() - pos);
+    ssize_t result = write(fd_, &content.c_str()[pos], content.size() - pos);
     if (result == -1 && errno != EAGAIN && errno != EWOULDBLOCK) {
       SetErrorFromErrno(IECStatus::CONNECTION_FAILURE, "write", status);
       return false;

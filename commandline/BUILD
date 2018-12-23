@@ -24,6 +24,9 @@ cc_library(
     hdrs = [
         "utils.h",
     ],
+    deps = [
+        "@boost//:format",
+    ],
 )
 
 cc_test(
@@ -33,7 +36,7 @@ cc_test(
     ],
     deps = [
         ":utils",
-	"@com_github_google_googletest//:gtest_main",
+        "@com_github_google_googletest//:gtest_main",
     ],
 )
 

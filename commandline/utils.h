@@ -7,13 +7,17 @@
 #include <unistd.h>
 #include <string>
 
+// Use a relatively small read buffer. We're dealing with a fairly slow bus.
+const int kReadBufferSize = 512;
+
 struct IECStatus {
   IECStatus() : status_code(OK) {}
 
   enum IECStatusCode {
     OK = 0x00,
     UNIMPLEMENTED = 0x01,
-    CONNECTION_FAILURE = 0x02
+    CONNECTION_FAILURE = 0x02,
+    INVALID_ARGUMENT = 0x03,
   };
   IECStatusCode status_code;
   std::string message;  // A status message describing the status.
@@ -36,11 +40,13 @@ void SetErrorFromErrno(IECStatus::IECStatusCode status_code,
 // BufferedReadWriter.
 class BufferedReadWriter {
  public:
-  BufferedReadWriter(int fd) : fd_(fd) {}
-
+  // Construct a BufferedReadWriter from a file descriptor.
+  BufferedReadWriter(int fd);
+  
   // Reads up to max_length characters until term_symbol is found and set result
   // to the read string (not including term_symbol). Returns true if successful,
-  // sets status otherwise.
+  // sets status otherwise. Note that the maximum value for max_length is
+  // kReadBufferSize.
   bool ReadTerminatedString(char term_symbol, size_t max_length,
                             std::string* result, IECStatus* status);
 
@@ -51,6 +57,16 @@ class BufferedReadWriter {
  private:
   // File descriptor to read from.
   int fd_;
+  // The buffer we use to cache read results.
+  char buffer_[kReadBufferSize];
+
+  // Pointers to start of buffered, but unprocessed data (inclusive).
+  // Invariant: 0 <= data_start_ <= kReadBufferSize.
+  size_t data_start_ = 0;
+  
+  // Pointers to end of buffered, but unprocessed data (exclusive).
+  // Invariant: 0 <= data_end_ <= kReadBufferSize.
+  size_t data_end_ = 0;
 };
 
 #endif  // UTILS_H

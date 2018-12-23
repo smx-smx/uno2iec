@@ -51,7 +51,45 @@ TEST_F(BufferedReadWriterTest, ReadWriteStringNoTerminator) {
   IECStatus status;
   BufferedReadWriter reader(pipefd_[0]);
   EXPECT_FALSE(reader.ReadTerminatedString('\r', 2, &result, &status));
-  close(pipefd_[0]);
   EXPECT_EQ(status.status_code, IECStatus::CONNECTION_FAILURE)
       << status.message;
+  // We should be able to recover from this problem by re-issuing the same
+  // request with a larger read ahead.
+  EXPECT_TRUE(reader.ReadTerminatedString('\r', 256, &result, &status));
+  EXPECT_EQ(result, kTerminatedString.substr(0, kTerminatedString.size() - 1))
+      << status.message;
+
+  close(pipefd_[0]);
+}
+
+TEST_F(BufferedReadWriterTest, ReadWriteLookAheadExceedsBuffer) {
+  const std::string kTerminatedString = "terminated_string\r";
+  ProduceString(kTerminatedString);
+
+  std::string result;
+  IECStatus status;
+  BufferedReadWriter reader(pipefd_[0]);
+  EXPECT_TRUE(
+      reader.ReadTerminatedString('\r', kReadBufferSize + 1, &result, &status));
+  close(pipefd_[0]);
+  // We requested a read ahead of more than our buffer size. We'll refuse that.
+  EXPECT_EQ(status.status_code, IECStatus::INVALID_ARGUMENT)
+      << status.message;
+}
+
+TEST_F(BufferedReadWriterTest, ReadWriteStringMultiLine) {
+  const std::string kTerminatedString =
+      "terminated_string\ranother_terminated_string\r";
+  ProduceString(kTerminatedString);
+
+  std::string result;
+  IECStatus status;
+  BufferedReadWriter reader(pipefd_[0]);
+  EXPECT_TRUE(reader.ReadTerminatedString('\r', 256, &result, &status));
+  EXPECT_EQ(result, "terminated_string") << status.message;
+  // Now read the second line. It should be whole.
+  EXPECT_TRUE(reader.ReadTerminatedString('\r', 256, &result, &status));
+  EXPECT_EQ(result, "another_terminated_string") << status.message;
+
+  close(pipefd_[0]);
 }

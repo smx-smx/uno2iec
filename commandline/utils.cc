@@ -1,13 +1,12 @@
+#include "utils.h"
+
 #include <errno.h>
 #include <string.h>
 #include <sys/select.h>
 #include <unistd.h>
 #include <algorithm>
 
-#include "utils.h"
-
-// Use a relatively small read buffer. We're dealing with a fairly slow bus.
-static size_t kReadBufferSize = 512;
+#include "boost/format.hpp"
 
 void SetError(IECStatus::IECStatusCode status_code, const std::string& context,
               IECStatus* status) {
@@ -22,6 +21,9 @@ void SetError(IECStatus::IECStatusCode status_code, const std::string& context,
     case IECStatus::CONNECTION_FAILURE:
       status->message = "Connection failure";
       break;
+    case IECStatus::INVALID_ARGUMENT:
+      status->message = "Invalid argument";
+      break;
   }
   if (!context.empty()) {
     status->message = context + ": " + status->message;
@@ -34,10 +36,23 @@ void SetErrorFromErrno(IECStatus::IECStatusCode status_code,
   status->message = status->message + ": " + strerror(errno);
 }
 
+BufferedReadWriter::BufferedReadWriter(int fd) : fd_(fd) {
+  memset(buffer_, 0, sizeof(buffer_));
+}
+
 bool BufferedReadWriter::ReadTerminatedString(char term_symbol,
                                               size_t max_length,
                                               std::string* result,
                                               IECStatus* status) {
+  if (max_length > kReadBufferSize) {
+    SetError(IECStatus::INVALID_ARGUMENT,
+             (boost::format("max_length(%u) > kReadBufferSize(%u)") %
+              max_length % kReadBufferSize)
+                 .str(),
+             status);
+    return false;
+  }
+  
   char buffer[kReadBufferSize];
   memset(buffer, 0, sizeof(buffer));
   result->clear();
@@ -66,7 +81,7 @@ bool BufferedReadWriter::ReadTerminatedString(char term_symbol,
   }
   // Read too much data without finding a terminator.
   SetError(IECStatus::CONNECTION_FAILURE,
-           std::string("couldn't find '") + term_symbol + "'", status);
+           (boost::format("couldn't find '%c'") % term_symbol).str(), status);
   return false;
 }
 

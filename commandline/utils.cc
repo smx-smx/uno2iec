@@ -1,29 +1,29 @@
 #include "utils.h"
 
+#include <algorithm>
 #include <errno.h>
 #include <string.h>
 #include <sys/select.h>
 #include <unistd.h>
-#include <algorithm>
 
 #include "boost/format.hpp"
 
-void SetError(IECStatus::IECStatusCode status_code, const std::string& context,
-              IECStatus* status) {
+void SetError(IECStatus::IECStatusCode status_code, const std::string &context,
+              IECStatus *status) {
   status->status_code = status_code;
   switch (status_code) {
-    case IECStatus::OK:
-      status->message = "OK";
-      break;
-    case IECStatus::UNIMPLEMENTED:
-      status->message = "Unimplemented";
-      break;
-    case IECStatus::CONNECTION_FAILURE:
-      status->message = "Connection failure";
-      break;
-    case IECStatus::INVALID_ARGUMENT:
-      status->message = "Invalid argument";
-      break;
+  case IECStatus::OK:
+    status->message = "OK";
+    break;
+  case IECStatus::UNIMPLEMENTED:
+    status->message = "Unimplemented";
+    break;
+  case IECStatus::CONNECTION_FAILURE:
+    status->message = "Connection failure";
+    break;
+  case IECStatus::INVALID_ARGUMENT:
+    status->message = "Invalid argument";
+    break;
   }
   if (!context.empty()) {
     status->message = context + ": " + status->message;
@@ -31,7 +31,7 @@ void SetError(IECStatus::IECStatusCode status_code, const std::string& context,
 }
 
 void SetErrorFromErrno(IECStatus::IECStatusCode status_code,
-                       const std::string& context, IECStatus* status) {
+                       const std::string &context, IECStatus *status) {
   SetError(status_code, context, status);
   status->message = status->message + ": " + strerror(errno);
 }
@@ -42,8 +42,8 @@ BufferedReadWriter::BufferedReadWriter(int fd) : fd_(fd) {
 
 bool BufferedReadWriter::ReadTerminatedString(char term_symbol,
                                               size_t max_length,
-                                              std::string* result,
-                                              IECStatus* status) {
+                                              std::string *result,
+                                              IECStatus *status) {
   if (max_length > kReadBufferSize) {
     SetError(IECStatus::INVALID_ARGUMENT,
              (boost::format("max_length(%u) > kReadBufferSize(%u)") %
@@ -52,7 +52,7 @@ bool BufferedReadWriter::ReadTerminatedString(char term_symbol,
              status);
     return false;
   }
-  
+
   char buffer[kReadBufferSize];
   memset(buffer, 0, sizeof(buffer));
   result->clear();
@@ -85,8 +85,8 @@ bool BufferedReadWriter::ReadTerminatedString(char term_symbol,
   return false;
 }
 
-bool BufferedReadWriter::WriteString(const std::string& content,
-                                     IECStatus* status) {
+bool BufferedReadWriter::WriteString(const std::string &content,
+                                     IECStatus *status) {
   if (content.empty()) {
     return true;
   }

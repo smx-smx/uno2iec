@@ -1,11 +1,11 @@
-#include <unistd.h>
 #include <thread>
+#include <unistd.h>
 
-#include "gtest/gtest.h"
 #include "utils.h"
+#include "gtest/gtest.h"
 
 class BufferedReadWriterTest : public ::testing::Test {
- protected:
+protected:
   void SetUp() override { ASSERT_EQ(pipe(pipefd_), 0); }
 
   void TearDown() override {
@@ -16,7 +16,7 @@ class BufferedReadWriterTest : public ::testing::Test {
   }
 
   // Write input to the writing side of the pipe from a separate thread.
-  void ProduceString(const std::string& input) {
+  void ProduceString(const std::string &input) {
     producer_ = std::thread([this, input]() {
       IECStatus status;
       BufferedReadWriter writer(pipefd_[1]);
@@ -73,8 +73,7 @@ TEST_F(BufferedReadWriterTest, ReadWriteLookAheadExceedsBuffer) {
       reader.ReadTerminatedString('\r', kReadBufferSize + 1, &result, &status));
   close(pipefd_[0]);
   // We requested a read ahead of more than our buffer size. We'll refuse that.
-  EXPECT_EQ(status.status_code, IECStatus::INVALID_ARGUMENT)
-      << status.message;
+  EXPECT_EQ(status.status_code, IECStatus::INVALID_ARGUMENT) << status.message;
 }
 
 TEST_F(BufferedReadWriterTest, ReadWriteStringMultiLine) {

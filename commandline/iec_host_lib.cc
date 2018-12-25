@@ -1,4 +1,6 @@
 #include <fcntl.h>
+#include <iostream>
+#include <memory>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -7,8 +9,6 @@
 #include <termios.h>
 #include <time.h>
 #include <unistd.h>
-#include <iostream>
-#include <memory>
 
 #include "boost/format.hpp"
 #include "iec_host_lib.h"
@@ -38,7 +38,9 @@ static const int kClockPin = 4;
 static const int kSrqInPin = 6;
 static const int kResetPin = 7;
 
-IECBusConnection::IECBusConnection(int arduino_fd) : arduino_fd_(arduino_fd) {}
+IECBusConnection::IECBusConnection(int arduino_fd)
+    : arduino_fd_(arduino_fd),
+      arduino_writer_(std::make_unique<BufferedReadWriter>(arduino_fd)) {}
 
 IECBusConnection::~IECBusConnection() {
   if (arduino_fd_ != -1) {
@@ -47,23 +49,23 @@ IECBusConnection::~IECBusConnection() {
   }
 }
 
-bool IECBusConnection::Reset(IECStatus* status) {
+bool IECBusConnection::Reset(IECStatus *status) {
   SetError(IECStatus::UNIMPLEMENTED, "Reset", status);
   return false;
 }
 
 bool IECBusConnection::SendCommand(int device_number,
-                                   const std::string& cmd_string,
-                                   IECStatus* status) {
+                                   const std::string &cmd_string,
+                                   IECStatus *status) {
   SetError(IECStatus::UNIMPLEMENTED, "SendCommand", status);
   return false;
 }
 
-bool IECBusConnection::Initialize(IECStatus* status) {
+bool IECBusConnection::Initialize(IECStatus *status) {
   std::string connection_string;
   for (int i = 0; i < kNumRetries; ++i) {
-    if (!ReadTerminatedString(arduino_fd_, '\r', kMaxLength, &connection_string,
-                              status)) {
+    if (!arduino_writer_->ReadTerminatedString('\r', kMaxLength,
+                                               &connection_string, status)) {
       return false;
     }
     if (connection_string.size() >= kConnectionStringPrefix.size() &&
@@ -71,10 +73,10 @@ bool IECBusConnection::Initialize(IECStatus* status) {
             kConnectionStringPrefix) {
       break;
     } else if (i >= (kNumRetries - 1)) {
-      SetError(
-          IECStatus::CONNECTION_FAILURE,
-          std::string("Unknown protocol response: '") + connection_string + "'",
-          status);
+      SetError(IECStatus::CONNECTION_FAILURE,
+               std::string("Unknown protocol response: '") + connection_string +
+                   "'",
+               status);
       return false;
     }
   }
@@ -82,10 +84,10 @@ bool IECBusConnection::Initialize(IECStatus* status) {
   if (sscanf(connection_string.substr(kConnectionStringPrefix.size()).c_str(),
              "%i", &protocol_version) <= 0 ||
       protocol_version < kMinProtocolVersion) {
-    SetError(
-        IECStatus::CONNECTION_FAILURE,
-        std::string("Unknown protocol response: '") + connection_string + "'",
-        status);
+    SetError(IECStatus::CONNECTION_FAILURE,
+             std::string("Unknown protocol response: '") + connection_string +
+                 "'",
+             status);
     return false;
   }
   time_t unix_time = time(nullptr);
@@ -99,14 +101,16 @@ bool IECBusConnection::Initialize(IECStatus* status) {
       (local_time.tm_year + 1900) % (local_time.tm_mon + 1) %
       local_time.tm_mday % local_time.tm_hour % local_time.tm_min %
       local_time.tm_sec;
-  if (!WriteString(arduino_fd_, config_string.str(), status)) return false;
+  if (!arduino_writer_->WriteString(config_string.str(), status)) {
+    return false;
+  }
 
   // TODO(aeckleder): We won't have to do this in the future. But right now,
   // we're trying to understand the existing protocol.
   for (int i = 0; i < 6; ++i) {
     std::string log_string;
-    if (!ReadTerminatedString(arduino_fd_, '\r', kMaxLength, &log_string,
-                              status)) {
+    if (!arduino_writer_->ReadTerminatedString('\r', kMaxLength, &log_string,
+                                               status)) {
       return false;
     }
     std::cout << "LOG LINE: " << log_string << std::endl;
@@ -114,7 +118,7 @@ bool IECBusConnection::Initialize(IECStatus* status) {
   return true;
 }
 
-IECBusConnection* IECBusConnection::Create(int arduino_fd, IECStatus* status) {
+IECBusConnection *IECBusConnection::Create(int arduino_fd, IECStatus *status) {
   if (arduino_fd == -1) {
     return nullptr;
   }
@@ -125,8 +129,8 @@ IECBusConnection* IECBusConnection::Create(int arduino_fd, IECStatus* status) {
   return conn.release();
 }
 
-IECBusConnection* IECBusConnection::Create(const std::string& device_file,
-                                           int speed, IECStatus* status) {
+IECBusConnection *IECBusConnection::Create(const std::string &device_file,
+                                           int speed, IECStatus *status) {
   int fd = open(device_file.c_str(), O_RDWR | O_NONBLOCK);
   if (fd == -1) {
     SetErrorFromErrno(IECStatus::CONNECTION_FAILURE,

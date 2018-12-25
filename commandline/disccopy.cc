@@ -8,7 +8,7 @@
 
 namespace po = boost::program_options;
 
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[]) {
   std::cout << "IEC Bus disc copy utility." << std::endl
             << "Copyright (c) 2018 Andreas Eckleder" << std::endl
             << std::endl;

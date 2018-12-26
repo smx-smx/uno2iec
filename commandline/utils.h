@@ -8,7 +8,10 @@
 #include <unistd.h>
 
 // Use a relatively small read buffer. We're dealing with a fairly slow bus.
-const int kReadBufferSize = 512;
+// This constant is not the read buffer size, but the maximum amount of read
+// ahead that may be specified when calling ReadTerminatedString.
+// The buffer size is derived from this value to be 2 * kMaxReadAhead - 1.
+const int kMaxReadAhead = 512;
 
 struct IECStatus {
   IECStatus() : status_code(OK) {}
@@ -46,7 +49,7 @@ public:
   // Reads up to max_length characters until term_symbol is found and set result
   // to the read string (not including term_symbol). Returns true if successful,
   // sets status otherwise. Note that the maximum value for max_length is
-  // kReadBufferSize.
+  // kMaxReadAhead.
   bool ReadTerminatedString(char term_symbol, size_t max_length,
                             std::string *result, IECStatus *status);
 
@@ -55,17 +58,41 @@ public:
   bool WriteString(const std::string &content, IECStatus *status);
 
 private:
+  // Looks for a terminator within [search_from, search_to).
+  // Constraints: search_from >= data_start_ and search_to <= data_end_.
+  // Code will check-fail if the constraints are violated.
+  // Returns -1 if the terminator wasn't found.
+  // Returns the position of the terminator otherwise.
+  ssize_t FindTerminatorFrom(char term_symbol, size_t search_from,
+                             size_t search_to);
+
+  // Consume the buffer from [data_start_, consume_to) and copy its content to
+  // result. If ignore_additional_bytes > 0, consumes the specified amount of
+  // extra bytes without copying them to result. This method might decide to
+  // move buffer content to reuse unused space at the beginning of the buffer,
+  // so it might modify both data_start_ and data_end_. Constraint: consume_to +
+  // ignore_additional_bytes <= data_end_.
+  void ConsumeData(size_t consume_to, size_t ignore_additional_bytes,
+                   std::string *result);
+
+  // Our buffer must support a maximum read ahead of kMaxReadAhead,
+  // and we want to be able to read up to kMaxReadAhead bytes of
+  // additional data. We move the second half of the buffer into
+  // the first half in case the first half is fully used.
+  static const int kBufferSize = 2 * kMaxReadAhead - 1;
+
   // File descriptor to read from.
   int fd_;
   // The buffer we use to cache read results.
-  char buffer_[kReadBufferSize];
+  char buffer_[kBufferSize];
 
-  // Pointers to start of buffered, but unprocessed data (inclusive).
-  // Invariant: 0 <= data_start_ <= kReadBufferSize.
+  // Pointer to start of buffered, but unprocessed data (inclusive).
+  // It always points into the first hald of the buffer.
+  // Invariant: 0 <= data_start_ < kMaxReadAhead.
   size_t data_start_ = 0;
 
   // Pointers to end of buffered, but unprocessed data (exclusive).
-  // Invariant: 0 <= data_end_ <= kReadBufferSize.
+  // Invariant: 0 <= data_end_ < kBufferSize.
   size_t data_end_ = 0;
 };
 

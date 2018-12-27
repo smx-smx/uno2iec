@@ -21,7 +21,7 @@ int main(int argc, char *argv[]) {
       "serial",
       po::value<std::string>(&arduino_device)->default_value("/dev/ttyUSB0"),
       "serial interface to use")(
-      "speed", po::value<int>(&serial_speed)->default_value(115200),
+      "speed", po::value<int>(&serial_speed)->default_value(57600),
       "baud rate");
 
   po::variables_map vm;

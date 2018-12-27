@@ -38,7 +38,7 @@ typedef unsigned long ulong;
 //#define EXPERIMENTAL_SPEED_FIX
 
 // For serial communication. 115200 Works fine, but probably use 57600 for bluetooth dongle for stability.
-#define DEFAULT_BAUD_RATE 115200
+#define DEFAULT_BAUD_RATE 57600
 #define SERIAL_TIMEOUT_MSECS 1000
 
 #if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__) || defined(__AVR_ATmega1284__) \

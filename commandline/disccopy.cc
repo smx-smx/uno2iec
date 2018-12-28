@@ -34,8 +34,12 @@ int main(int argc, char *argv[]) {
   }
 
   IECStatus status;
-  std::unique_ptr<IECBusConnection> connection(
-      IECBusConnection::Create(arduino_device, serial_speed, &status));
+  std::unique_ptr<IECBusConnection> connection(IECBusConnection::Create(
+      arduino_device, serial_speed,
+      [](char level, const std::string &channel, const std::string &message) {
+        std::cout << level << ":" << channel << ": " << message;
+      },
+      &status));
   if (!connection) {
     std::cout << status.message << std::endl;
     return 1;

@@ -38,9 +38,10 @@ static const int kClockPin = 4;
 static const int kSrqInPin = 6;
 static const int kResetPin = 7;
 
-IECBusConnection::IECBusConnection(int arduino_fd)
+IECBusConnection::IECBusConnection(int arduino_fd, LogCallback log_callback)
     : arduino_fd_(arduino_fd),
-      arduino_writer_(std::make_unique<BufferedReadWriter>(arduino_fd)) {}
+      arduino_writer_(std::make_unique<BufferedReadWriter>(arduino_fd)),
+      log_callback_(log_callback) {}
 
 IECBusConnection::~IECBusConnection() {
   if (arduino_fd_ != -1) {
@@ -118,11 +119,13 @@ bool IECBusConnection::Initialize(IECStatus *status) {
   return true;
 }
 
-IECBusConnection *IECBusConnection::Create(int arduino_fd, IECStatus *status) {
+IECBusConnection *IECBusConnection::Create(int arduino_fd,
+                                           LogCallback log_callback,
+                                           IECStatus *status) {
   if (arduino_fd == -1) {
     return nullptr;
   }
-  auto conn = std::make_unique<IECBusConnection>(arduino_fd);
+  auto conn = std::make_unique<IECBusConnection>(arduino_fd, log_callback);
   if (!conn->Initialize(status)) {
     return nullptr;
   }
@@ -130,7 +133,8 @@ IECBusConnection *IECBusConnection::Create(int arduino_fd, IECStatus *status) {
 }
 
 IECBusConnection *IECBusConnection::Create(const std::string &device_file,
-                                           int speed, IECStatus *status) {
+                                           int speed, LogCallback log_callback,
+                                           IECStatus *status) {
   int fd = open(device_file.c_str(), O_RDWR | O_NONBLOCK);
   if (fd == -1) {
     SetErrorFromErrno(IECStatus::CONNECTION_FAILURE,
@@ -166,5 +170,5 @@ IECBusConnection *IECBusConnection::Create(const std::string &device_file,
     SetErrorFromErrno(IECStatus::CONNECTION_FAILURE, "tcsetattr", status);
     return nullptr;
   }
-  return Create(fd, status);
+  return Create(fd, log_callback, status);
 }

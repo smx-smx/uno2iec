@@ -62,6 +62,10 @@ public:
   bool Initialize(IECStatus *status);
 
 private:
+  // Run on the response background thread. Reads from arduino_writer_,
+  // calls log_callback_ for log messages and dispatches responses.
+  void ProcessResponses();
+
   // File descriptor used for communication.
   int arduino_fd_;
 

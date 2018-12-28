@@ -1,4 +1,6 @@
+#include <chrono>
 #include <iostream>
+#include <thread>
 
 #include "boost/program_options/cmdline.hpp"
 #include "boost/program_options/options_description.hpp"
@@ -7,6 +9,8 @@
 #include "iec_host_lib.h"
 
 namespace po = boost::program_options;
+
+using namespace std::chrono_literals;
 
 int main(int argc, char *argv[]) {
   std::cout << "IEC Bus disc copy utility." << std::endl
@@ -37,13 +41,16 @@ int main(int argc, char *argv[]) {
   std::unique_ptr<IECBusConnection> connection(IECBusConnection::Create(
       arduino_device, serial_speed,
       [](char level, const std::string &channel, const std::string &message) {
-        std::cout << level << ":" << channel << ": " << message;
+        std::cout << level << ":" << channel << ": " << message << std::endl;
       },
       &status));
   if (!connection) {
     std::cout << status.message << std::endl;
     return 1;
   }
+
+  // TODO(aeckleder): Do something useful here.
+  std::this_thread::sleep_for(2s);
 
   return 0;
 }

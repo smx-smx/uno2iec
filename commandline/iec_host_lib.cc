@@ -44,6 +44,11 @@ IECBusConnection::IECBusConnection(int arduino_fd, LogCallback log_callback)
       log_callback_(log_callback) {}
 
 IECBusConnection::~IECBusConnection() {
+  if (response_thread_.joinable()) {
+    // Step response processing.
+    response_thread_.join();
+  }
+
   if (arduino_fd_ != -1) {
     close(arduino_fd_);
     arduino_fd_ = -1;
@@ -106,17 +111,20 @@ bool IECBusConnection::Initialize(IECStatus *status) {
     return false;
   }
 
-  // TODO(aeckleder): We won't have to do this in the future. But right now,
-  // we're trying to understand the existing protocol.
-  for (int i = 0; i < 6; ++i) {
-    std::string log_string;
-    if (!arduino_writer_->ReadTerminatedString('\r', kMaxLength, &log_string,
-                                               status)) {
-      return false;
-    }
-    std::cout << "LOG LINE: " << log_string << std::endl;
-  }
+  // Start our response thread.
+  response_thread_ = std::thread(&IECBusConnection::ProcessResponses, this);
+
   return true;
+}
+
+void IECBusConnection::ProcessResponses() {
+  std::string log_string;
+  IECStatus status;
+  while (arduino_writer_->ReadTerminatedString('\r', kMaxLength, &log_string,
+                                               &status)) {
+    log_callback_('I', "ARDUINO", log_string);
+  }
+  log_callback_('E', "ERROR", status.message);
 }
 
 IECBusConnection *IECBusConnection::Create(int arduino_fd,

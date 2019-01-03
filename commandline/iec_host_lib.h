@@ -5,6 +5,7 @@
 #ifndef IEC_HOST_LIB_H
 #define IEC_HOST_LIB_H
 
+#include <map>
 #include <memory>
 #include <string>
 #include <thread>
@@ -77,6 +78,10 @@ private:
 
   // Thread processing responses from the Arduino, including log messages.
   std::thread response_thread_;
+
+  // Configured and used by the response thread to provide user identifiable
+  // debug log channel names.
+  std::map<char, std::string> debug_channel_map_;
 };
 
 #endif // IEC_HOST_LIB_H

@@ -118,13 +118,49 @@ bool IECBusConnection::Initialize(IECStatus *status) {
 }
 
 void IECBusConnection::ProcessResponses() {
-  std::string log_string;
-  IECStatus status;
-  while (arduino_writer_->ReadTerminatedString('\r', kMaxLength, &log_string,
-                                               &status)) {
-    log_callback_('I', "ARDUINO", log_string);
+  // TODO(aeckleder): Infinithread. Don't block on first character reads and
+  // introduce quit conditional to shut down the background thread.
+  while (true) {
+    std::string read_string;
+    IECStatus status;
+    
+    if (!arduino_writer_->ReadUpTo(1, 1, &read_string, &status)) {
+      log_callback_('E', "CLIENT", status.message);
+      return;
+    }
+    switch (read_string[0]) {
+    case '!':
+      // Debug channel configuration.
+      if (!arduino_writer_->ReadTerminatedString('\r', kMaxLength, &read_string,
+						 &status)) {
+	log_callback_('E', "CLIENT", status.message);
+	return;
+      }
+      if (read_string.size() < 2) {
+	log_callback_('E', "CLIENT",
+		      (boost::format("Malformed channel configuration string '%s'") % read_string).str());
+      }
+      debug_channel_map_[read_string[0]] = read_string.substr(1);
+      break;
+    case 'D':
+      // Standard debug message.
+      if (!arduino_writer_->ReadTerminatedString('\r', kMaxLength, &read_string,
+						 &status)) {
+	log_callback_('E', "CLIENT", status.message);
+	return;
+      }
+      if (read_string.size() < 3 || debug_channel_map_.count(read_string[1]) == 0) {
+	// Print the malformed message, but don't terminate execution.
+	log_callback_('E', "CLIENT",
+		      (boost::format("Malformed debug message '%s'") % read_string).str());
+      }
+      log_callback_(read_string[0], debug_channel_map_[read_string[1]], read_string.substr(2));
+      break;
+    default:
+      // Ignore all other messages.
+      break;
+    }
   }
-  log_callback_('E', "ERROR", status.message);
 }
 
 IECBusConnection *IECBusConnection::Create(int arduino_fd,

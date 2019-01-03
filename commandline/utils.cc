@@ -129,6 +129,55 @@ bool BufferedReadWriter::ReadTerminatedString(char term_symbol,
   }
 }
 
+bool BufferedReadWriter::ReadUpTo(size_t min_length, size_t max_length,
+                                  std::string *result, IECStatus *status) {
+  if (min_length > max_length) {
+    SetError(IECStatus::INVALID_ARGUMENT,
+             (boost::format("min_length(%u) > max_length(%u)") % min_length %
+              max_length)
+                 .str(),
+             status);
+    return false;
+  }
+  // Start with an empty string.
+  result->clear();
+
+  // Add any already cached data.
+  size_t read_from_buffer = std::min(data_end_ - data_start_, max_length);
+  ConsumeData(data_start_ + read_from_buffer,
+              /*ignore_additional_bytes=*/0, result);
+  // We already read the maximum number of characters from the buffer,
+  // so we're done (and might even have some data left in the buffer).
+  if (result->size() == max_length)
+    return true;
+
+  // If we get here we have consumed all of the existing buffer.
+  // We'll be using this buffer to read additional data, but we'll never
+  // read more than we return in result.
+  assert(data_end_ - data_start_ == 0);
+
+  ssize_t res = -1;
+  while (result->size() < min_length && res <= 0) {
+    size_t read_max =
+        std::min(static_cast<size_t>(kBufferSize), max_length - result->size());
+    ssize_t res = read(fd_, buffer_, read_max);
+    if (res == -1 && errno != EAGAIN && errno != EWOULDBLOCK) {
+      SetErrorFromErrno(IECStatus::CONNECTION_FAILURE, "read", status);
+      return false;
+    }
+    if (res > 0) {
+      // Append new data to the string and do another iteration through the
+      // loop without waiting for additional data. We might exit the loop as
+      // a result, in case we have read at least min_length bytes.
+      result->append(buffer_, res);
+      continue;
+    }
+    // We didn't read any extra data.
+    // TODO(aeckleder): Block until more data becomes available.
+  }
+  return true;
+}
+
 bool BufferedReadWriter::WriteString(const std::string &content,
                                      IECStatus *status) {
   if (content.empty()) {

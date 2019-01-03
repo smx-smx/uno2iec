@@ -16,6 +16,12 @@ const int kMaxReadAhead = 512;
 struct IECStatus {
   IECStatus() : status_code(OK) {}
 
+  // Reset the status object.
+  void Clear() {
+    status_code = OK;
+    message.clear();
+  }
+
   enum IECStatusCode {
     OK = 0x00,
     UNIMPLEMENTED = 0x01,
@@ -52,6 +58,16 @@ public:
   // kMaxReadAhead.
   bool ReadTerminatedString(char term_symbol, size_t max_length,
                             std::string *result, IECStatus *status);
+
+  // Reads at least min_length characters and up to max_length characters, set
+  // result to the
+  // read string. Returns true if successful (reading zero bytes doesn't
+  // constitute an error),
+  // sets status otherwise. This method will block until at least min_length
+  // characters have
+  // been read or an error occurred.
+  bool ReadUpTo(size_t min_length, size_t max_length, std::string *result,
+                IECStatus *status);
 
   // Writes the specified content, with no terminator such as the null character
   // or newline. Returns true if successful, sets status otherwise.

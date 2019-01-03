@@ -44,6 +44,7 @@ cc_test(
 # versa using the IEC host library.
 cc_binary(
     name = "disccopy",
+    linkopts = [ "-lpthread" ],
     srcs = [
         "disccopy.cc",
     ],

@@ -9,7 +9,7 @@ class BufferedReadWriterTest : public ::testing::Test {
 protected:
   void SetUp() override {
     // Ignore broken pipe. It happens naturally during our tests
-    // and should abort other tests.
+    // and shouldn't abort them.
     signal(SIGPIPE, SIG_IGN);
     ASSERT_EQ(pipe(pipefd_), 0);
   }

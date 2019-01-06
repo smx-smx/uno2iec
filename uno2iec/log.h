@@ -13,7 +13,7 @@
 
 enum Severity { Success, Information, Warning, Error };
 void registerFacilities(void);
-void Log(byte severity , char facility, char* msg);
+void Log(byte severity, char facility, char *msg);
 
 #else
 
@@ -23,4 +23,3 @@ void Log(byte severity , char facility, char* msg);
 #endif // NO_LOGGING
 
 #endif
-

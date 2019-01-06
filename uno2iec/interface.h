@@ -8,6 +8,48 @@
 
 #include "cbmdefines.h"
 
+// Serial interface documentation
+// ==============================
+//
+// The serial interface can be operated either in host mode or in device mode.
+// In host mode, the Arduino receives commands via serial line and translates them
+// into appropriate IEC bus signals.
+//
+// In device mode, the Arduino listens for commands on the IEC bus and translates
+// them into requests sent out via serial line.
+//
+// To be able to easily tell those commands apart, host mode uses lower case
+// characters while device mode uses upper case characters.
+//
+// Host mode commands
+// ------------------
+//
+// 'r': Perform a bus reset on the IEC bus.
+// 'o': Open a channel. The following bytes are <device number>, <channel>,
+//      <num data bytes>, <data to send to the channel>
+// 'c': Close a channel. The following bytes are <device number>, <channel>.
+//
+// Host mode responses
+// -------------------
+//
+// 'D': Debug / Logging output. Terminated by '\r'. (same as device mode).
+// '!': Register logging facility. (same as device mode).
+//
+// Escaping rules:
+//  Response data is escaped and terminated by '\r' to avoid having to specify
+//  the size of the data upfront. We only use this mechanism when sending data
+//  from the Arduino to the serial line, because buffer space on the Arduino
+//  is very limited.
+//
+//  The escape character is '\'. These are the
+//  valid escape sequences:
+//   '\' + '\r': Represents ASCII code 0x0D (carriage return) when contained
+//               in the data stream.
+//   '\' + '\':  Represents ASCII code 0x5C (backslash) when contained in the
+//               data stream.
+//
+// TODO(aeckleder): Document device mode requests.
+
 /*
 enum  {
 	IS_FAIL = 0xFF, // IFail: SD card or fat not ok
@@ -40,7 +82,10 @@ public:
 	virtual ~Interface() {}
 
 	// The handler returns the current IEC state, see the iec_driver.hpp for possible states.
+        // It is called repeatedly in a loop and will either poll the IEC bus (in device mode) or the serial line (in host mode)
+        // for commands.
 	byte handler(void);
+
 	// Keeping the system date and time as set on a specific moment. The millis() will then keep the elapsed time since
 	// moment the time was set.
 	void setDateTime(word year, byte month, byte day, byte hour, byte minute, byte second);
@@ -54,7 +99,33 @@ public:
 #endif
 
 private:
+        // Poll the IEC bus for new commands.
+        byte deviceModeHandler(void);
+        // Poll the serial line for new commands.
+        byte hostModeHandler(void);
+  
+  
+        // Reset device state.
 	void reset(void);
+
+        //
+        // The following methods are host mode specific.
+        //
+        
+        // Handle an open request coming in via serial line.
+        // Reads remaining arguments from the serial line
+        // and sends a corresponding request to the bus.
+        void handleOpenRequest();
+        
+        // Handle a close request coming in via serial line.
+        // Reads remaining arguments from the serial line
+        // and sends a corresponding request to the bus.        
+        void handleCloseRequest();
+
+        //
+        // The following methods are device mode specific.
+        //
+
 	void saveFile();
 	void sendFile();
 	void sendListing(/*PFUNC_SEND_LISTING sender*/);

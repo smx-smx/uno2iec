@@ -65,8 +65,9 @@ Interface::Interface(IEC& iec)
 
 void Interface::reset(void)
 {
-	m_openState = O_NOTHING;
-	m_queuedError = ErrIntro;
+        // We are asked to do a device reset.
+      	m_openState = O_NOTHING;
+  	m_queuedError = ErrIntro;
 } // reset
 
 
@@ -280,8 +281,127 @@ void Interface::saveFile()
 	} while(not done);
 } // saveFile
 
+byte Interface::handler()
+{
+  if (m_iec.isHostMode()) {
+    return hostModeHandler();
+  } else {
+    return deviceModeHandler();
+  }
+}
 
-byte Interface::handler(void)
+byte Interface::hostModeHandler(void)
+{
+  char cmd;
+  if (COMPORT.readBytes(&cmd, 1) == 1) {
+      // We received a command via serial link.
+      switch (cmd) {
+          case 'r':
+              // We want to trigger a bus reset.
+              m_iec.triggerReset();
+	      strcpy_P(serCmdIOBuf, (PGM_P)F("Performed IEC bus reset."));
+	      Log(Information, FAC_IFACE, serCmdIOBuf);
+              break;
+          case 'o':
+              handleOpenRequest();
+              break;              
+          case 'c':
+              handleCloseRequest();
+              break;
+          default:
+	      strcpy_P(serCmdIOBuf, (PGM_P)F("UNKNOWN SERIAL COMMAND"));
+	      Log(Error, FAC_IFACE, serCmdIOBuf);
+              break;
+      }
+  }   
+  return IEC::ATN_IDLE;
+} // hostModeHandler
+
+void Interface::handleOpenRequest(void)
+{
+  char requestHeader[3];
+  if (COMPORT.readBytes(requestHeader, 3) != 3) {
+       // Didn't receive the full sequence within our timeout. This is some kind of 
+      strcpy_P(serCmdIOBuf, (PGM_P)F("Received incomplete open command on serial line."));
+      Log(Error, FAC_IFACE, serCmdIOBuf);
+      return;
+  }
+  if (requestHeader[2] > 0) {      
+      if (COMPORT.readBytes(serCmdIOBuf, requestHeader[2]) != requestHeader[2]) {
+          strcpy_P(serCmdIOBuf, (PGM_P)F("Received incomplete extra data for open on serial line."));
+          Log(Error, FAC_IFACE, serCmdIOBuf);
+          return;
+      }
+  }
+  noInterrupts();
+  boolean hasIECError = !m_iec.sendATNToChannel(requestHeader[0], requestHeader[1], IEC::ATN_CODE_OPEN);
+  interrupts();
+  if (hasIECError) {
+       // Sending ATN Open failed.
+      sprintf_P(serCmdIOBuf, (PGM_P)F("Sending ATN LISTEN + ATN OPEN failed for dev=%d chan=%d"), 
+                requestHeader[0], requestHeader[1]);
+      Log(Error, FAC_IFACE, serCmdIOBuf);
+  }    
+  noInterrupts();
+  for (int i = 0; i < requestHeader[2] && !hasIECError; ++i) {
+      if (i < requestHeader[2] - 1) {
+              hasIECError = m_iec.send(serCmdIOBuf[i]);
+      } else {
+              hasIECError = m_iec.sendEOI(serCmdIOBuf[i]);
+      }
+  }
+
+  boolean unlistenError = m_iec.sendATNToDevice(requestHeader[0], IEC::ATN_CODE_UNLISTEN);
+  interrupts();
+  if (unlistenError) {
+       // Sending ATN Open failed.
+      sprintf_P(serCmdIOBuf, (PGM_P)F("Sending ATN UNLISTEN failed for dev=%d"), 
+                requestHeader[0]);
+      Log(Error, FAC_IFACE, serCmdIOBuf);
+  }
+  hasIECError |= unlistenError;
+    
+  sprintf_P(serCmdIOBuf, (PGM_P)F("handleOpenRequest completed for dev=%d chan=%d, error=%d"),
+            requestHeader[0], requestHeader[1], (int)hasIECError);
+  Log(Information, FAC_IFACE, serCmdIOBuf);
+} // handleOpenRequest
+
+void Interface::handleCloseRequest(void)
+{
+  char requestHeader[2];
+  if (COMPORT.readBytes(requestHeader, 2) != 2) {
+       // Didn't receive the full sequence within our timeout. This is some kind of 
+      strcpy_P(serCmdIOBuf, (PGM_P)F("Received incomplete close command on serial line."));
+      Log(Error, FAC_IFACE, serCmdIOBuf);
+      return;
+  }
+  noInterrupts();
+  boolean hasIECError = !m_iec.sendATNToChannel(requestHeader[0], requestHeader[1], IEC::ATN_CODE_CLOSE);
+  interrupts();
+  if (hasIECError) {
+       // Sending ATN Open failed.
+      sprintf_P(serCmdIOBuf, (PGM_P)F("Sending ATN LISTEN + ATN CLOSE failed for dev=%d chan=%d"), 
+                requestHeader[0], requestHeader[1]);
+      Log(Error, FAC_IFACE, serCmdIOBuf);
+  }  
+
+  noInterrupts();
+  boolean unlistenError = m_iec.sendATNToDevice(requestHeader[0], IEC::ATN_CODE_UNLISTEN);
+  interrupts();
+  if (unlistenError) {
+       // Sending ATN Open failed.
+      sprintf_P(serCmdIOBuf, (PGM_P)F("Sending ATN UNLISTEN failed for dev=%d"), 
+                requestHeader[0]);
+      Log(Error, FAC_IFACE, serCmdIOBuf);
+  }
+  hasIECError |= unlistenError;
+    
+  sprintf_P(serCmdIOBuf, (PGM_P)F("handleCloseRequest completed for dev=%d chan=%d, error=%d"),
+            requestHeader[0], requestHeader[1], (int)hasIECError);
+  Log(Information, FAC_IFACE, serCmdIOBuf);
+} // handleCloseRequest
+
+byte Interface::deviceModeHandler(void)
 {
 #ifdef HAS_RESET_LINE
 	if(m_iec.checkRESET()) {
@@ -358,7 +478,7 @@ byte Interface::handler(void)
 	} // IEC not idle
 
 	return retATN;
-} // handler
+} // deviceModehandler
 
 
 void Interface::setDateTime(word year, byte month, byte day, byte hour, byte minute, byte second)

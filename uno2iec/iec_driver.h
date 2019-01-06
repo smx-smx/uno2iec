@@ -61,21 +61,36 @@ public:
 	//
 	boolean init();
 
+        // Returns true if the driver is running in host mode (emulating the host computer rather
+        // than a serial device). Returns false otherwise.
+        bool isHostMode() { return deviceNumber() == 0; }
+
 	// Checks if CBM is sending an attention message. If this is the case,
 	// the message is recieved and stored in atn_cmd.
 	//
 	ATNCheck checkATN(ATNCmd& cmd);
 
-	// Checks if CBM is sending a reset (setting the RESET line high). This is typicall
+	// Checks if CBM is sending a reset (setting the RESET line high). This is typical
 	// when the CBM is reset itself. In this case, we are supposed to reset all states to initial.
 	boolean checkRESET();
 
+        // Pull the reset pin to ground to reset the bus. For use in host mode.
+        void triggerReset();
+        
+        // Send command to the specified deviceNumber and channel with ATN pulled to GND.
+        // If something is not OK, FALSE is returned.
+        boolean sendATNToChannel(byte deviceNumber, byte channel, ATNCommand command);
+
+        // Send command to the specified deviceNumber with ATN pulled to GND.
+        // If something is not OK, FALSE is returned.
+        boolean sendATNToDevice(byte deviceNumber, ATNCommand command);
+        
 	// Sends a byte. The communication must be in the correct state: a load command
 	// must just have been recieved. If something is not OK, FALSE is returned.
 	//
 	boolean send(byte data);
 
-	// Same as IEC_send, but indicating that this is the last byte.
+	// Same as send, but indicating that this is the last byte.
 	//
 	boolean sendEOI(byte data);
 
@@ -101,7 +116,7 @@ public:
 private:
 	byte timeoutWait(byte waitBit, boolean whileHigh);
 	byte receiveByte(void);
-	boolean sendByte(byte data, boolean signalEOI);
+	boolean sendByte(byte data, boolean signalEOI, boolean atnMode);
 	boolean turnAround(void);
 	boolean undoTurnAround(void);
 
@@ -159,6 +174,11 @@ private:
 	{
 		writePIN(m_clockPin, state);
 	}
+
+        inline void writeRESET(boolean state)
+        {
+                writePIN(m_resetPin, state);
+        }
 
 	// communication must be reset
 	byte m_state;

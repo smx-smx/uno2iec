@@ -152,7 +152,11 @@ static void waitForPeer()
 	registerFacilities();
 
 	// We're in business.
-	sprintf_P(tempBuffer, (PGM_P)F("CONNECTED, READY FOR IEC DATA WITH CBM AS DEV %u."), deviceNumber);
+        if (deviceNumber == 0) {
+          sprintf_P(tempBuffer, (PGM_P)F("CONNECTED, READY FOR SENDING IEC DATA WITH CBM AS HOST."));
+        } else {
+	  sprintf_P(tempBuffer, (PGM_P)F("CONNECTED, READY FOR IEC DATA WITH CBM AS DEV %u."), deviceNumber);
+        }
 	Log(Success, 'M', tempBuffer);
 	COMPORT.flush();
 	sprintf_P(tempBuffer, (PGM_P)F("IEC pins: ATN:%u CLK:%u DATA:%u RST:%u SRQIN:%u"), atnPin, clockPin, dataPin,

@@ -49,7 +49,24 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  // TODO(aeckleder): Do something useful here.
+  if (!connection->Reset(&status)) {
+    std::cout << "Reset: " << status.message << std::endl;
+    return 1;
+  }
+
+  std::this_thread::sleep_for(2s);
+
+  // Perform a full disk format, just to do something.
+  if (!connection->OpenChannel(8, 15, "N:MYDISC,MD", &status)) {
+    std::cout << "OpenChannel: " << status.message << std::endl;
+    return 1;
+  }
+
+  if (!connection->CloseChannel(8, 15, &status)) {
+    std::cout << "CloseChannel: " << status.message << std::endl;
+    return 1;
+  }
+
   std::this_thread::sleep_for(2s);
 
   return 0;

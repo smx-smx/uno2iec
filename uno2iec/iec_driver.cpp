@@ -1,5 +1,5 @@
 #include "iec_driver.h"
-//#include "log.h"
+#include "log.h"
 
 using namespace CBM;
 
@@ -19,6 +19,7 @@ using namespace CBM;
 #define TIMING_ATN_PREDELAY 50  // delay required in atn    (us)
 #define TIMING_ATN_DELAY    100 // delay required after atn (us)
 #define TIMING_FNF_DELAY    100 // delay after fnf?         (us)
+#define TIMING_RESET_DELAY  200 // delay for IEC bus reset  (ms)
 
 // Version 0.5 equivalent timings: 70, 5, 200, 20, 20, 50, 100, 100
 
@@ -78,8 +79,11 @@ byte IEC::timeoutWait(byte waitBit, boolean whileHigh)
 
 	m_state = errorFlag;
 
-	// Wait for ATN release, problem might have occured during attention
-	while(not readATN());
+	// When not in host mode, wait for ATN release,
+        // problem might have occured during attention.
+        if (!isHostMode()) {
+        	while(not readATN());
+        }
 
 	// Note: The while above is without timeout. If ATN is held low forever,
 	//       the CBM is out in the woods and needs a reset anyways.
@@ -152,34 +156,35 @@ byte IEC::receiveByte(void)
 //
 // Sends the byte and can signal EOI
 //
-boolean IEC::sendByte(byte data, boolean signalEOI)
-{
-	// Listener must have accepted previous data
-	if(timeoutWait(m_dataPin, true))
-		return false;
+boolean IEC::sendByte(byte data, boolean signalEOI, boolean atnMode) {
+        // Listener must have accepted previous data
+        if (timeoutWait(m_dataPin, true)) {
+              return false;
+        }
 
-	// Say we're ready
-	writeCLOCK(false);
+        // Say we're ready
+        writeCLOCK(false);
 
-	// Wait for listener to be ready
-	if(timeoutWait(m_dataPin, false))
-		return false;
+        // Wait for listener to be ready
+        if(timeoutWait(m_dataPin, false)) {
+              return false;
+        }
 
 	if(signalEOI) {
-		// FIXME: Make this like sd2iec and may not need a fixed delay here.
+	      // FIXME: Make this like sd2iec and may not need a fixed delay here.
 
-		// Signal eoi by waiting 200 us
-		delayMicroseconds(TIMING_EOI_WAIT);
+	      // Signal eoi by waiting 200 us
+	      delayMicroseconds(TIMING_EOI_WAIT);
 
-		// get eoi acknowledge:
-		if(timeoutWait(m_dataPin, true))
-			return false;
+	      // get eoi acknowledge:
+	      if(timeoutWait(m_dataPin, true))
+                    return false;
 
-		if(timeoutWait(m_dataPin, false))
-			return false;
-	}
-
-	delayMicroseconds(TIMING_NO_EOI);
+	      if(timeoutWait(m_dataPin, false))
+	            return false;
+        }
+        
+  	delayMicroseconds(TIMING_NO_EOI);        
 
 	// Send bits
 	for(byte n = 0; n < 8; n++) {
@@ -204,9 +209,13 @@ boolean IEC::sendByte(byte data, boolean signalEOI)
 	// Line stabilization delay
 	delayMicroseconds(TIMING_STABLE_WAIT);
 
-	// Wait for listener to accept data
-	if(timeoutWait(m_dataPin, true))
-		return false;
+	// When not in ATN mode, wait for listener to accept data.
+        // TODO(aeckleder): It's unclear why we can't do this while in ATN
+        // mode. Possibly because we're supposed to release the ATN line
+        // before the final ACK will come.
+	if(!atnMode && timeoutWait(m_dataPin, true)) {
+                return false;
+        }
 
 	return true;
 } // sendByte
@@ -375,8 +384,60 @@ boolean IEC::checkRESET()
 	//	return false;
 	//	// hmmm. Is this all todo?
 	return readRESET();
-} // checkATN
+} // checkRESET
 
+void IEC::triggerReset()
+{
+      // Pull the reset line to low and wait for a bit.
+      writeRESET(true);
+      delay(TIMING_RESET_DELAY);
+      writeRESET(false);
+}
+
+boolean IEC::sendATNToChannel(byte deviceNumber, byte channel, ATNCommand command)
+{
+      // Pull ATN line to GND.
+      writeATN(true);
+      // Release the data line and pull clock to GND to indicate we're ready.
+      writeDATA(false);
+      writeCLOCK(true);
+      
+      delayMicroseconds(TIMING_ATN_PREDELAY);
+      
+      byte data = ATN_CODE_LISTEN bitor deviceNumber;      
+      boolean result = sendByte(data, /*signalEOI=*/false, /*atnMode=*/true);
+      if (result) {
+        // ATN LISTEN sent successfully. Now tell device to
+        // open a channel.
+        data = command bitor channel;
+        result = sendByte(data, /*signalEOI=*/false, /*atnMode=*/true);
+      }
+      // Release ATN line.
+      writeATN(false);
+      
+      delayMicroseconds(TIMING_ATN_DELAY);
+      
+      return result;
+}
+
+boolean IEC::sendATNToDevice(byte deviceNumber, ATNCommand command) {
+      // Pull ATN line to GND.
+      writeATN(true);
+      // Release the data line and pull clock to GND to indicate we're ready.
+      writeDATA(false);
+      writeCLOCK(true);
+      
+      delayMicroseconds(TIMING_ATN_PREDELAY);
+            
+      byte data = command bitor deviceNumber;      
+      boolean result = sendByte(data, /*signalEOI=*/false, /*atnMode=*/true);
+      // Release ATN line.
+      writeATN(false);
+      
+      delayMicroseconds(TIMING_ATN_DELAY);
+      
+      return result;
+}
 
 // IEC_receive receives a byte
 //
@@ -390,7 +451,7 @@ byte IEC::receive()
 //
 boolean IEC::send(byte data)
 {
-	return sendByte(data, false);
+	return sendByte(data, false, /*atnMode=*/false);
 } // send
 
 
@@ -398,7 +459,7 @@ boolean IEC::send(byte data)
 //
 boolean IEC::sendEOI(byte data)
 {
-	if(sendByte(data, true)) {
+	if(sendByte(data, true, /*atnMode=*/false)) {
 		// As we have just send last byte, turn bus back around
 		if(undoTurnAround())
 			return true;

@@ -18,7 +18,7 @@ namespace CBM {
 
 // For every change of the serial protocol that makes a difference enough for incompitability, this number
 // should be increased. That way the host side can detect whether the peers are compatible or not.
-#define CURRENT_UNO2IEC_PROTOCOL_VERSION 2
+#define CURRENT_UNO2IEC_PROTOCOL_VERSION 3
 
 // Device OPEN channels.
 // Special channels.

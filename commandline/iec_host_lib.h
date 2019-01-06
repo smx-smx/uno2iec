@@ -31,11 +31,17 @@ public:
   // status.
   bool Reset(IECStatus *status);
 
-  // Send a command via the command channel. to the device specified by
-  // device_number. Returns true on success. In case of an error, status will be
+  // Open channel on the device with the specific device_number. The optional
+  // data_string specifies data to send to the channel, e.g. a filename.
+  // Returns true on success. In case of an error, status will be
   // set to an appropriate error status.
-  bool SendCommand(int device_number, const std::string &cmd_string,
-                   IECStatus *status);
+  bool OpenChannel(char device_number, char channel,
+                   const std::string &data_string, IECStatus *status);
+
+  // Close channel on the device with the specific device_number.
+  // Returns true on success. In case of an error, status will be
+  // set to an appropriate error status.
+  bool CloseChannel(char device_number, char channel, IECStatus *status);
 
   // Create IECBusConnection instance using the specified device_file and serial
   // port speed. If log_callback is specified, the function will be called for

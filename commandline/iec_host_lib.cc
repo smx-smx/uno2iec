@@ -19,24 +19,30 @@ static const size_t kMaxLength = 256;
 
 static const std::string kConnectionStringPrefix = "connect_arduino:";
 
-// TODO(aeckleder): We'll need to increase the version as soon as we start
-// supporting custom features.
-static const int kMinProtocolVersion = 2;
+// Needs to support host mode.
+static const int kMinProtocolVersion = 3;
 
 // Number of tries for successfully reading the connection string prefix.
 static const int kNumRetries = 5;
 
 // Config values. These are hardcoded for now and match the defaults of
-// the Arduino implementation.
-// TODO(aeckleder): We'll be playing the host, so we shouldn't specify a device
-// number.
-static const int kDeviceNumber = 8;
+// the Arduino implementation. We request to be the host, so we specify
+// a device number of zero here (which is special cased on the Arduino).
+// Device zero (the C64 keyboard) is normally not addressed through the
+// IEC bus, so this special casing should be OK.
+static const int kDeviceNumber = 0;
 
 static const int kAtnPin = 5;
 static const int kDataPin = 3;
 static const int kClockPin = 4;
 static const int kSrqInPin = 6;
 static const int kResetPin = 7;
+
+// Commands supported by the Arduino's serial interface. All of these are
+// single character strings.
+static const std::string kCmdReset = "r"; // Reset the IEC bus.
+static const std::string kCmdOpen = "o";  // Open a channel on a device.
+static const std::string kCmdClose = "c"; // Close a channel on a device.
 
 IECBusConnection::IECBusConnection(int arduino_fd, LogCallback log_callback)
     : arduino_fd_(arduino_fd),
@@ -56,15 +62,31 @@ IECBusConnection::~IECBusConnection() {
 }
 
 bool IECBusConnection::Reset(IECStatus *status) {
-  SetError(IECStatus::UNIMPLEMENTED, "Reset", status);
-  return false;
+  if (!arduino_writer_->WriteString(kCmdReset, status)) {
+    return false;
+  }
+  return true;
 }
 
-bool IECBusConnection::SendCommand(int device_number,
+bool IECBusConnection::OpenChannel(char device_number, char channel,
                                    const std::string &cmd_string,
                                    IECStatus *status) {
-  SetError(IECStatus::UNIMPLEMENTED, "SendCommand", status);
-  return false;
+  std::string request_string = kCmdOpen + device_number + channel +
+                               static_cast<char>(cmd_string.size()) +
+                               cmd_string;
+  if (!arduino_writer_->WriteString(request_string, status)) {
+    return false;
+  }
+  return true;
+}
+
+bool IECBusConnection::CloseChannel(char device_number, char channel,
+                                    IECStatus *status) {
+  std::string request_string = kCmdClose + device_number + channel;
+  if (!arduino_writer_->WriteString(request_string, status)) {
+    return false;
+  }
+  return true;
 }
 
 bool IECBusConnection::Initialize(IECStatus *status) {
@@ -84,6 +106,11 @@ bool IECBusConnection::Initialize(IECStatus *status) {
                    "'",
                status);
       return false;
+    } else {
+      log_callback_('W', "CLIENT",
+                    (boost::format("Malformed connection string '%s'") %
+                     connection_string)
+                        .str());
     }
   }
   int protocol_version = 0;
@@ -91,8 +118,7 @@ bool IECBusConnection::Initialize(IECStatus *status) {
              "%i", &protocol_version) <= 0 ||
       protocol_version < kMinProtocolVersion) {
     SetError(IECStatus::CONNECTION_FAILURE,
-             std::string("Unknown protocol response: '") + connection_string +
-                 "'",
+             std::string("Unsupported protocol: '") + connection_string + "'",
              status);
     return false;
   }

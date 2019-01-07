@@ -54,15 +54,15 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  std::this_thread::sleep_for(2s);
+  std::this_thread::sleep_for(4s);
 
   // Perform a full disk format, just to do something.
-  if (!connection->OpenChannel(8, 15, "N:MYDISC,MD", &status)) {
+  if (!connection->OpenChannel(9, 15, "N:MYDISC,ID", &status)) {
     std::cout << "OpenChannel: " << status.message << std::endl;
     return 1;
   }
 
-  if (!connection->CloseChannel(8, 15, &status)) {
+  if (!connection->CloseChannel(9, 15, &status)) {
     std::cout << "CloseChannel: " << status.message << std::endl;
     return 1;
   }

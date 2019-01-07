@@ -117,6 +117,15 @@ private:
   boolean turnAround(void);
   boolean undoTurnAround(void);
 
+  // makeTalker is called internally by turnAround()/undoTurnAround(). If
+  // makeTalker is true,
+  // the Arduino becomes the talker and expects all other devices to be passive
+  // or listeners.
+  // If isTalker is false, the Arduino becomes one of the listeners on the bus,
+  // expecting
+  // one of the other devices to talk instead.
+  boolean makeTalker(boolean makeTalker);
+
   // false = LOW, true == HIGH
   inline boolean readPIN(byte pinNumber) {
     // To be able to read line we must be set to input, not driving.

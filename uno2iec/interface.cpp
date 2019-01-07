@@ -343,6 +343,7 @@ void Interface::handleOpenRequest(void) {
       Log(Error, FAC_IFACE, serCmdIOBuf);
       return;
     }
+    serCmdIOBuf[requestHeader[2]] = 0;
   }
   noInterrupts();
   boolean hasIECError = !m_iec.sendATNToChannel(
@@ -357,16 +358,28 @@ void Interface::handleOpenRequest(void) {
     Log(Error, FAC_IFACE, serCmdIOBuf);
   }
   noInterrupts();
-  for (int i = 0; i < requestHeader[2] && !hasIECError; ++i) {
+
+  int i = 0;
+  for (i = 0; i < requestHeader[2] && !hasIECError; ++i) {
     if (i < requestHeader[2] - 1) {
-      hasIECError = m_iec.send(serCmdIOBuf[i]);
+      hasIECError = !m_iec.send(serCmdIOBuf[i]);
     } else {
-      hasIECError = m_iec.sendEOI(serCmdIOBuf[i]);
+      // Send the last character with an EOI.
+      hasIECError = !m_iec.sendEOI(serCmdIOBuf[i]);
     }
   }
+  interrupts();
+  if (hasIECError && i > 0) {
+    // Sending filename failed.
+    char buf[80];
+    sprintf_P(buf, (PGM_P)F("byte %d of cmd failed,dev=%d, cmd='%s'"), i - 1,
+              requestHeader[0], serCmdIOBuf);
+    Log(Error, FAC_IFACE, buf);
+  }
+  noInterrupts();
 
   boolean unlistenError =
-      m_iec.sendATNToDevice(requestHeader[0], IEC::ATN_CODE_UNLISTEN);
+      !m_iec.sendATNToDevice(/*requestHeader[0]*/ 0, IEC::ATN_CODE_UNLISTEN);
   interrupts();
   if (unlistenError) {
     // Sending ATN Open failed.
@@ -407,7 +420,7 @@ void Interface::handleCloseRequest(void) {
 
   noInterrupts();
   boolean unlistenError =
-      m_iec.sendATNToDevice(requestHeader[0], IEC::ATN_CODE_UNLISTEN);
+      !m_iec.sendATNToDevice(/*requestHeader[0]*/ 0, IEC::ATN_CODE_UNLISTEN);
   interrupts();
   if (unlistenError) {
     // Sending ATN Open failed.
@@ -704,8 +717,9 @@ void Interface::handleATNCmdCodeDataListen() {
 
     if (ErrOK == m_queuedError)
       saveFile();
-    //		else // FIXME: Check what the drive does here when saving goes wrong.
-    //FNF is probably not right. Dummyread entire buffer from CBM?
+    //		else // FIXME: Check what the drive does here when saving goes
+    //wrong.
+    // FNF is probably not right. Dummyread entire buffer from CBM?
     //			m_iec.sendFNF();
   }
 } // handleATNCmdCodeDataListen

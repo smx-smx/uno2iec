@@ -80,8 +80,8 @@ byte IEC::timeoutWait(byte waitBit, boolean whileHigh) {
   // When not in host mode, wait for ATN release,
   // problem might have occured during attention.
   if (!isHostMode()) {
-    while (not readATN())
-      ;
+    while (not readATN()) {
+    };
   }
 
   // Note: The while above is without timeout. If ATN is held low forever,
@@ -206,11 +206,8 @@ boolean IEC::sendByte(byte data, boolean signalEOI, boolean atnMode) {
   // Line stabilization delay
   delayMicroseconds(TIMING_STABLE_WAIT);
 
-  // When not in ATN mode, wait for listener to accept data.
-  // TODO(aeckleder): It's unclear why we can't do this while in ATN
-  // mode. Possibly because we're supposed to release the ATN line
-  // before the final ACK will come.
-  if (!atnMode && timeoutWait(m_dataPin, true)) {
+  // wait for listener to accept data.
+  if (timeoutWait(m_dataPin, true)) {
     return false;
   }
 
@@ -219,32 +216,42 @@ boolean IEC::sendByte(byte data, boolean signalEOI, boolean atnMode) {
 
 // IEC turnaround
 boolean IEC::turnAround(void) {
-  // Wait until clock is released
-  if (timeoutWait(m_clockPin, false))
-    return false;
-
-  writeDATA(false);
-  delayMicroseconds(TIMING_BIT);
-  writeCLOCK(true);
-  delayMicroseconds(TIMING_BIT);
-
-  return true;
+  if (isHostMode()) {
+    // In host mode, a turnaround means we become the listener
+    // because a peripheral should talk instead of us.
+    return makeTalker(false);
+  } else {
+    return makeTalker(true);
+  }
 } // turnAround
 
 // this routine will set the direction on the bus back to normal
 // (the way it was when the computer was switched on)
 boolean IEC::undoTurnAround(void) {
-  writeDATA(true);
-  delayMicroseconds(TIMING_BIT);
-  writeCLOCK(false);
-  delayMicroseconds(TIMING_BIT);
+  if (isHostMode()) {
+    // In host mode, the normal situation is that we're the talker
+    // and peripherals listen.
+    return makeTalker(true);
+  } else {
+    return makeTalker(false);
+  }
+} // undoTurnAround
 
-  // wait until the computer releases the clock line
-  if (timeoutWait(m_clockPin, true))
+boolean IEC::makeTalker(boolean makeTalker) {
+  // Wait until clock is released in case we want to become the talker
+  if (makeTalker && timeoutWait(m_clockPin, false))
     return false;
 
-  return true;
-} // undoTurnAround
+  writeDATA(!makeTalker);
+  delayMicroseconds(TIMING_BIT);
+  writeCLOCK(makeTalker);
+  delayMicroseconds(TIMING_BIT);
+
+  // wait until the computer starts holding the clock line to GND in case
+  // we have become a listener.
+  if (!makeTalker && timeoutWait(m_clockPin, true))
+    return false;
+} // makeTalker
 
 /******************************************************************************
  *                                                                             *
@@ -391,24 +398,30 @@ boolean IEC::sendATNToChannel(byte deviceNumber, byte channel,
                               ATNCommand command) {
   // Pull ATN line to GND.
   writeATN(true);
+
   // Release the data line and pull clock to GND to indicate we're ready.
   writeDATA(false);
   writeCLOCK(true);
 
-  delayMicroseconds(TIMING_ATN_PREDELAY);
+  delay(1); // Wait for 1 ms.
 
   byte data = ATN_CODE_LISTEN bitor deviceNumber;
   boolean result = sendByte(data, /*signalEOI=*/false, /*atnMode=*/true);
   if (result) {
-    // ATN LISTEN sent successfully. Now tell device to
-    // open a channel.
+    writeDATA(false);
+    writeCLOCK(true);
+
+    delay(1); // Wait for 1 ms.
+
+    // ATN LISTEN sent successfully. Now tell device about our channel
+    // command (open, close or data).
     data = command bitor channel;
     result = sendByte(data, /*signalEOI=*/false, /*atnMode=*/true);
   }
   // Release ATN line.
   writeATN(false);
 
-  delayMicroseconds(TIMING_ATN_DELAY);
+  // delayMicroseconds(TIMING_ATN_DELAY);
 
   return result;
 }
@@ -420,14 +433,17 @@ boolean IEC::sendATNToDevice(byte deviceNumber, ATNCommand command) {
   writeDATA(false);
   writeCLOCK(true);
 
-  delayMicroseconds(TIMING_ATN_PREDELAY);
+  delay(1); // Wait for 1 ms.
 
   byte data = command bitor deviceNumber;
   boolean result = sendByte(data, /*signalEOI=*/false, /*atnMode=*/true);
   // Release ATN line.
   writeATN(false);
 
-  delayMicroseconds(TIMING_ATN_DELAY);
+  delayMicroseconds(40); // Wait for 40 us
+
+  writeCLOCK(true);
+  writeDATA(false);
 
   return result;
 }
@@ -446,8 +462,9 @@ boolean IEC::send(byte data) {
 //
 boolean IEC::sendEOI(byte data) {
   if (sendByte(data, true, /*atnMode=*/false)) {
-    // As we have just send last byte, turn bus back around
-    if (undoTurnAround())
+    // As we have just send last byte, so unless we're the host
+    // we need to turn the bus around again.
+    if (isHostMode() || undoTurnAround())
       return true;
   }
 

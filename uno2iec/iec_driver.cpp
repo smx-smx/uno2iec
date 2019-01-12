@@ -56,7 +56,9 @@ byte IEC::timeoutWait(byte waitBit, boolean whileHigh) {
   word t = 0;
   boolean c;
 
-  while (t < TIMEOUT) {
+  // TODO(aeckleder): Even though it can take a while for the 1541 to get ready,
+  // we need some kind of (configurable) timeout here.
+  while (isHostMode() || t < TIMEOUT) {
     // Check the waiting condition:
     c = readPIN(waitBit);
 

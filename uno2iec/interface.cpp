@@ -457,8 +457,10 @@ void Interface::handleGetDataRequest(void) {
                               IEC::ATN_CODE_TALK, IEC::ATN_CODE_DATA);
   interrupts();
 
+  bool dataStreamStarted = false;
   if (!hasIECError) {
     // Indicate that a data package is coming.
+    dataStreamStarted = true;
     COMPORT.write('r');
   } else {
     // Sending ATN Open failed.
@@ -470,8 +472,7 @@ void Interface::handleGetDataRequest(void) {
   }
 
   int i = 0;
-  while (!((m_iec.state() bitand IEC::eoiFlag) or
-           (m_iec.state() bitand IEC::errorFlag) or hasIECError)) {
+  while (!hasIECError) {
     // Retrieve a byte from the IEC bus.
     noInterrupts();
     byte data = m_iec.receive();
@@ -480,23 +481,27 @@ void Interface::handleGetDataRequest(void) {
       // We receive a valid byte. Make something of it.
       // TODO(aeckleder): Escape the data.
       COMPORT.write(data);
+    } else {
+      hasIECError = true;
+      break;
     }
+    if (m_iec.state() bitand IEC::eoiFlag)
+      break;
     ++i;
   }
-  if (!hasIECError) {
-    // If we had no error in the previous phase, we definitely need
-    // to terminate our data stream, no matter whether we ran
-    // info problems or not.
+  if (dataStreamStarted) {
+    // If we started a data stream, we definitely need to terminate it,
+    // no matter whether we ran into problems or not.
     // TODO(aeckleder): Also return an error code in case we *did*
     // run into trouble.
     COMPORT.write('\r');
     COMPORT.flush();
   }
 
-  if ((m_iec.state() bitand IEC::errorFlag) && i > 0) {
+  if (hasIECError) {
     // Reading data failed.
     char buf[80];
-    sprintf_P(buf, (PGM_P)F("reading byte %d failed, dev=%d"), i - 1,
+    sprintf_P(buf, (PGM_P)F("reading byte %d failed, dev=%d"), i,
               requestHeader[0]);
     Log(Error, FAC_IFACE, buf);
   }

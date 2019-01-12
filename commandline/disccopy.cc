@@ -65,8 +65,9 @@ int main(int argc, char *argv[]) {
   }
   std::cout << "ReadFromChannel: response=" << response << std::endl;
 
-  // TODO(aeckleder): The above command should wait until it is finished.
-  std::this_thread::sleep_for(2s);
+  // TODO(aeckleder): Commands do not currently block, so we have to
+  // wait a bit until they're done.
+  std::this_thread::sleep_for(1s);
 
   // Perform a full disk format, just to do something.
   if (!connection->OpenChannel(9, 15, "N:MYDISC" /*"N:MYDISC,ID"*/, &status)) {
@@ -74,13 +75,20 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  std::this_thread::sleep_for(10s);
+  // TODO(aeckleder): Commands do not currently block, so we have to
+  // wait a bit until they're done.
+  std::this_thread::sleep_for(1s);
+
   // Get the result for the disc format.
   if (!connection->ReadFromChannel(9, 15, &response, &status)) {
     std::cout << "ReadFromChannel: " << status.message << std::endl;
     return 1;
   }
   std::cout << "ReadFromChannel: response=" << response << std::endl;
+
+  // TODO(aeckleder): Commands do not currently block, so we have to
+  // wait a bit until they're done.
+  std::this_thread::sleep_for(1s);
 
   if (!connection->CloseChannel(9, 15, &status)) {
     std::cout << "CloseChannel: " << status.message << std::endl;

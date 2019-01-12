@@ -209,7 +209,9 @@ void IECBusConnection::ProcessResponses() {
         log_callback_('E', "CLIENT", status.message);
         return;
       }
-      log_callback_('I', "RESPONSE", std::string("\"") + read_string + "\"");
+      log_callback_('I', "RESPONSE", std::string("") +
+                                         std::to_string(read_string.size()) +
+                                         ": \"" + read_string + "\"");
       break;
     default:
       // Ignore all other messages.

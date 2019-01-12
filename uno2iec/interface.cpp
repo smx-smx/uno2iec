@@ -456,6 +456,7 @@ void Interface::handleGetDataRequest(void) {
       !m_iec.sendATNToChannel(requestHeader[0], requestHeader[1],
                               IEC::ATN_CODE_TALK, IEC::ATN_CODE_DATA);
   interrupts();
+
   if (!hasIECError) {
     // Indicate that a data package is coming.
     COMPORT.write('r');
@@ -480,12 +481,16 @@ void Interface::handleGetDataRequest(void) {
       // TODO(aeckleder): Escape the data.
       COMPORT.write(data);
     }
-    if ((m_iec.state() bitand IEC::eoiFlag) or
-        (m_iec.state() bitand IEC::errorFlag)) {
-      COMPORT.write('\r');
-      COMPORT.flush();
-    }
     ++i;
+  }
+  if (!hasIECError) {
+    // If we had no error in the previous phase, we definitely need
+    // to terminate our data stream, no matter whether we ran
+    // info problems or not.
+    // TODO(aeckleder): Also return an error code in case we *did*
+    // run into trouble.
+    COMPORT.write('\r');
+    COMPORT.flush();
   }
 
   if ((m_iec.state() bitand IEC::errorFlag) && i > 0) {

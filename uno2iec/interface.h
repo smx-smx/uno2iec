@@ -29,6 +29,8 @@
 // 'r': Perform a bus reset on the IEC bus.
 // 'o': Open a channel. The following bytes are <device number>, <channel>,
 //      <num data bytes>, <data to send to the channel>
+// 'g': Get data from a channel. The following bytes are <device number>,
+//      <channel>. The response is encoded as described below.
 // 'c': Close a channel. The following bytes are <device number>, <channel>.
 //
 // Host mode responses
@@ -36,6 +38,8 @@
 //
 // 'D': Debug / Logging output. Terminated by '\r'. (same as device mode).
 // '!': Register logging facility. (same as device mode).
+// 'r': Standard host mode data response, followed by an escaped data stream
+//      as described below (and terminated by '\r').
 //
 // Escaping rules:
 //  Response data is escaped and terminated by '\r' to avoid having to specify
@@ -128,6 +132,11 @@ private:
   // Reads remaining arguments from the serial line
   // and sends a corresponding request to the bus.
   void handleCloseRequest();
+
+  // Handle a get data request coming in via serial line.
+  // Reads remaining arguments from the serial line
+  // and sends a corresponding request to the bus.
+  void handleGetDataRequest();
 
   //
   // The following methods are device mode specific.

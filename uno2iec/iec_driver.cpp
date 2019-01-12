@@ -247,10 +247,13 @@ boolean IEC::makeTalker(boolean makeTalker) {
   writeCLOCK(makeTalker);
   delayMicroseconds(TIMING_BIT);
 
-  // wait until the computer starts holding the clock line to GND in case
+  // wait until another device starts holding the clock line to GND in case
   // we have become a listener.
-  if (!makeTalker && timeoutWait(m_clockPin, true))
+  if (!makeTalker && timeoutWait(m_clockPin, true)) {
     return false;
+  }
+
+  return true;
 } // makeTalker
 
 /******************************************************************************
@@ -395,7 +398,7 @@ void IEC::triggerReset() {
 }
 
 boolean IEC::sendATNToChannel(byte deviceNumber, byte channel,
-                              ATNCommand command) {
+                              ATNCommand talkOrListen, ATNCommand command) {
   // Pull ATN line to GND.
   writeATN(true);
 
@@ -405,15 +408,12 @@ boolean IEC::sendATNToChannel(byte deviceNumber, byte channel,
 
   delay(1); // Wait for 1 ms.
 
-  byte data = ATN_CODE_LISTEN bitor deviceNumber;
+  byte data = talkOrListen bitor deviceNumber;
   boolean result = sendByte(data, /*signalEOI=*/false, /*atnMode=*/true);
   if (result) {
-    writeDATA(false);
-    writeCLOCK(true);
-
     delay(1); // Wait for 1 ms.
 
-    // ATN LISTEN sent successfully. Now tell device about our channel
+    // ATN LISTEN or TALK sent successfully. Now tell device about our channel
     // command (open, close or data).
     data = command bitor channel;
     result = sendByte(data, /*signalEOI=*/false, /*atnMode=*/true);
@@ -423,29 +423,43 @@ boolean IEC::sendATNToChannel(byte deviceNumber, byte channel,
 
   // delayMicroseconds(TIMING_ATN_DELAY);
 
-  return result;
+  if (!result)
+    return false;
+
+  if (talkOrListen == ATN_CODE_TALK) {
+    // We sent a ATN TALK code, so the device will be talking to us shortly.
+    if (!turnAround())
+      return false;
+  }
+  return true;
 }
 
-boolean IEC::sendATNToDevice(byte deviceNumber, ATNCommand command) {
+boolean IEC::sendATNToDevice(byte deviceNumber, ATNCommand talkOrListen) {
   // Pull ATN line to GND.
   writeATN(true);
-  // Release the data line and pull clock to GND to indicate we're ready.
-  writeDATA(false);
-  writeCLOCK(true);
 
   delay(1); // Wait for 1 ms.
 
-  byte data = command bitor deviceNumber;
+  byte data = talkOrListen bitor deviceNumber;
   boolean result = sendByte(data, /*signalEOI=*/false, /*atnMode=*/true);
   // Release ATN line.
   writeATN(false);
 
-  delayMicroseconds(40); // Wait for 40 us
+  // delayMicroseconds(40); // Wait for 40 us
 
-  writeCLOCK(true);
-  writeDATA(false);
+  // writeCLOCK(true);
+  // writeDATA(false);
 
-  return result;
+  if (!result)
+    return false;
+
+  if (talkOrListen == ATN_CODE_UNTALK) {
+    // We sent a ATN UNTALK code, so the device will not be talking to us
+    // any more.
+    if (!undoTurnAround())
+      return false;
+  }
+  return true;
 }
 
 // IEC_receive receives a byte

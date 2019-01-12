@@ -317,6 +317,9 @@ byte Interface::hostModeHandler(void) {
     case 'c':
       handleCloseRequest();
       break;
+    case 'g':
+      handleGetDataRequest();
+      break;
     default:
       strcpy_P(serCmdIOBuf, (PGM_P)F("UNKNOWN SERIAL COMMAND"));
       Log(Error, FAC_IFACE, serCmdIOBuf);
@@ -346,8 +349,9 @@ void Interface::handleOpenRequest(void) {
     serCmdIOBuf[requestHeader[2]] = 0;
   }
   noInterrupts();
-  boolean hasIECError = !m_iec.sendATNToChannel(
-      requestHeader[0], requestHeader[1], IEC::ATN_CODE_OPEN);
+  boolean hasIECError =
+      !m_iec.sendATNToChannel(requestHeader[0], requestHeader[1],
+                              IEC::ATN_CODE_LISTEN, IEC::ATN_CODE_OPEN);
   interrupts();
   if (hasIECError) {
     // Sending ATN Open failed.
@@ -406,8 +410,9 @@ void Interface::handleCloseRequest(void) {
     return;
   }
   noInterrupts();
-  boolean hasIECError = !m_iec.sendATNToChannel(
-      requestHeader[0], requestHeader[1], IEC::ATN_CODE_CLOSE);
+  boolean hasIECError =
+      !m_iec.sendATNToChannel(requestHeader[0], requestHeader[1],
+                              IEC::ATN_CODE_LISTEN, IEC::ATN_CODE_CLOSE);
   interrupts();
   if (hasIECError) {
     // Sending ATN Open failed.
@@ -436,6 +441,79 @@ void Interface::handleCloseRequest(void) {
       requestHeader[0], requestHeader[1], (int)hasIECError);
   Log(Information, FAC_IFACE, serCmdIOBuf);
 } // handleCloseRequest
+
+void Interface::handleGetDataRequest(void) {
+  char requestHeader[2];
+  if (COMPORT.readBytes(requestHeader, 2) != 2) {
+    // Didn't receive the full sequence within our timeout. This is some kind of
+    strcpy_P(serCmdIOBuf,
+             (PGM_P)F("Received incomplete get data command on serial line."));
+    Log(Error, FAC_IFACE, serCmdIOBuf);
+    return;
+  }
+  noInterrupts();
+  boolean hasIECError =
+      !m_iec.sendATNToChannel(requestHeader[0], requestHeader[1],
+                              IEC::ATN_CODE_TALK, IEC::ATN_CODE_DATA);
+  interrupts();
+  if (!hasIECError) {
+    // Indicate that a data package is coming.
+    COMPORT.write('r');
+  } else {
+    // Sending ATN Open failed.
+    sprintf_P(
+        serCmdIOBuf,
+        (PGM_P)F("Sending ATN TALK + ATN CODE DATA failed for dev=%d chan=%d"),
+        requestHeader[0], requestHeader[1]);
+    Log(Error, FAC_IFACE, serCmdIOBuf);
+  }
+
+  int i = 0;
+  while (!((m_iec.state() bitand IEC::eoiFlag) or
+           (m_iec.state() bitand IEC::errorFlag) or hasIECError)) {
+    // Retrieve a byte from the IEC bus.
+    noInterrupts();
+    byte data = m_iec.receive();
+    interrupts();
+    if (!(m_iec.state() bitand IEC::errorFlag)) {
+      // We receive a valid byte. Make something of it.
+      // TODO(aeckleder): Escape the data.
+      COMPORT.write(data);
+    }
+    if ((m_iec.state() bitand IEC::eoiFlag) or
+        (m_iec.state() bitand IEC::errorFlag)) {
+      COMPORT.write('\r');
+      COMPORT.flush();
+    }
+    ++i;
+  }
+
+  if ((m_iec.state() bitand IEC::errorFlag) && i > 0) {
+    // Reading data failed.
+    char buf[80];
+    sprintf_P(buf, (PGM_P)F("reading byte %d failed, dev=%d"), i - 1,
+              requestHeader[0]);
+    Log(Error, FAC_IFACE, buf);
+  }
+  noInterrupts();
+
+  boolean unlistenError =
+      !m_iec.sendATNToDevice(/*requestHeader[0]*/ 0, IEC::ATN_CODE_UNTALK);
+  interrupts();
+  if (unlistenError) {
+    // Sending ATN Untalk failed.
+    sprintf_P(serCmdIOBuf, (PGM_P)F("Sending ATN UNTALK failed for dev=%d"),
+              requestHeader[0]);
+    Log(Error, FAC_IFACE, serCmdIOBuf);
+  }
+  hasIECError |= unlistenError;
+
+  sprintf_P(
+      serCmdIOBuf,
+      (PGM_P)F("handleGetDataRequest completed for dev=%d chan=%d, error=%d"),
+      requestHeader[0], requestHeader[1], (int)hasIECError);
+  Log(Information, FAC_IFACE, serCmdIOBuf);
+} // handleGetDataRequest
 
 byte Interface::deviceModeHandler(void) {
 #ifdef HAS_RESET_LINE
@@ -718,7 +796,7 @@ void Interface::handleATNCmdCodeDataListen() {
     if (ErrOK == m_queuedError)
       saveFile();
     //		else // FIXME: Check what the drive does here when saving goes
-    //wrong.
+    // wrong.
     // FNF is probably not right. Dummyread entire buffer from CBM?
     //			m_iec.sendFNF();
   }

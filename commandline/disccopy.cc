@@ -25,7 +25,7 @@ int main(int argc, char *argv[]) {
       "serial",
       po::value<std::string>(&arduino_device)->default_value("/dev/ttyUSB0"),
       "serial interface to use")(
-      "speed", po::value<int>(&serial_speed)->default_value(57600),
+      "speed", po::value<int>(&serial_speed)->default_value(115200),
       "baud rate");
 
   po::variables_map vm;
@@ -56,8 +56,19 @@ int main(int argc, char *argv[]) {
 
   std::this_thread::sleep_for(4s);
 
+  // Read from the command channel. This is always OK, the open
+  // call is completely optional.
+  std::string response;
+  if (!connection->ReadFromChannel(9, 15, &response, &status)) {
+    std::cout << "ReadFromChannel: " << status.message << std::endl;
+    return 1;
+  }
+
+  // TODO(aeckleder): The above command should wait until it is finished.
+  std::this_thread::sleep_for(2s);
+
   // Perform a full disk format, just to do something.
-  if (!connection->OpenChannel(9, 15, "N:MYDISC,ID", &status)) {
+  if (!connection->OpenChannel(9, 15, "N:MYDISC" /*"N:MYDISC,ID"*/, &status)) {
     std::cout << "OpenChannel: " << status.message << std::endl;
     return 1;
   }

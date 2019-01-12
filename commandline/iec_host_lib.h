@@ -38,6 +38,9 @@ public:
   bool OpenChannel(char device_number, char channel,
                    const std::string &data_string, IECStatus *status);
 
+  bool ReadFromChannel(char device_number, char channel, std::string *result,
+                       IECStatus *status);
+
   // Close channel on the device with the specific device_number.
   // Returns true on success. In case of an error, status will be
   // set to an appropriate error status.

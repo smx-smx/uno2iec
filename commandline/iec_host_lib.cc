@@ -43,6 +43,8 @@ static const int kResetPin = 7;
 static const std::string kCmdReset = "r"; // Reset the IEC bus.
 static const std::string kCmdOpen = "o";  // Open a channel on a device.
 static const std::string kCmdClose = "c"; // Close a channel on a device.
+static const std::string kCmdGetData =
+    "g"; // Get data from a channel on a device.
 
 IECBusConnection::IECBusConnection(int arduino_fd, LogCallback log_callback)
     : arduino_fd_(arduino_fd),
@@ -77,6 +79,17 @@ bool IECBusConnection::OpenChannel(char device_number, char channel,
   if (!arduino_writer_->WriteString(request_string, status)) {
     return false;
   }
+  return true;
+}
+
+bool IECBusConnection::ReadFromChannel(char device_number, char channel,
+                                       std::string *result, IECStatus *status) {
+  std::string request_string = kCmdGetData + device_number + channel;
+  if (!arduino_writer_->WriteString(request_string, status)) {
+    return false;
+  }
+  // TODO(aeckleder): Actually return the data rather than printing it
+  // to the log.
   return true;
 }
 
@@ -188,6 +201,15 @@ void IECBusConnection::ProcessResponses() {
       }
       log_callback_(read_string[0], debug_channel_map_[read_string[1]],
                     read_string.substr(2));
+      break;
+    case 'r':
+      // Standard data response message.
+      if (!arduino_writer_->ReadTerminatedString('\r', kMaxLength, &read_string,
+                                                 &status)) {
+        log_callback_('E', "CLIENT", status.message);
+        return;
+      }
+      log_callback_('I', "RESPONSE", read_string);
       break;
     default:
       // Ignore all other messages.

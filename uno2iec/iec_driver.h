@@ -72,14 +72,14 @@ public:
   // Pull the reset pin to ground to reset the bus. For use in host mode.
   void triggerReset();
 
-  // Send command to the specified deviceNumber and channel with ATN pulled to
-  // GND.
-  // If something is not OK, FALSE is returned.
-  boolean sendATNToChannel(byte deviceNumber, byte channel, ATNCommand command);
+  // Send two code command to the specified deviceNumber and channel with
+  // ATN pulled to GND. If something is not OK, FALSE is returned.
+  boolean sendATNToChannel(byte deviceNumber, byte channel,
+                           ATNCommand talkOrListen, ATNCommand command);
 
-  // Send command to the specified deviceNumber with ATN pulled to GND.
+  // Send talkOrListen to the specified deviceNumber with ATN pulled to GND.
   // If something is not OK, FALSE is returned.
-  boolean sendATNToDevice(byte deviceNumber, ATNCommand command);
+  boolean sendATNToDevice(byte deviceNumber, ATNCommand talkOrListen);
 
   // Sends a byte. The communication must be in the correct state: a load
   // command

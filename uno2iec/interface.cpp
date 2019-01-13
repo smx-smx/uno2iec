@@ -339,10 +339,12 @@ void Interface::handleOpenRequest(void) {
     return;
   }
   if (requestHeader[2] > 0) {
-    if (COMPORT.readBytes(serCmdIOBuf, requestHeader[2]) != requestHeader[2]) {
-      strcpy_P(
-          serCmdIOBuf,
-          (PGM_P)F("Received incomplete extra data for open on serial line."));
+    int numRead = COMPORT.readBytes(serCmdIOBuf, requestHeader[2]);
+    if (numRead != requestHeader[2]) {
+      sprintf_P(serCmdIOBuf,
+                (PGM_P)F("Received incomplete extra data for open on serial "
+                         "line: requestHeader[2]=%d, actual=%d"),
+                requestHeader[2], numRead);
       Log(Error, FAC_IFACE, serCmdIOBuf);
       return;
     }
@@ -393,11 +395,13 @@ void Interface::handleOpenRequest(void) {
   }
   hasIECError |= unlistenError;
 
-  sprintf_P(
-      serCmdIOBuf,
-      (PGM_P)F("handleOpenRequest completed for dev=%d chan=%d, error=%d"),
-      requestHeader[0], requestHeader[1], (int)hasIECError);
-  Log(Information, FAC_IFACE, serCmdIOBuf);
+  if (hasIECError) {
+    sprintf_P(
+        serCmdIOBuf,
+        (PGM_P)F("handleOpenRequest completed for dev=%d chan=%d, error=%d"),
+        requestHeader[0], requestHeader[1], (int)hasIECError);
+    Log(Error, FAC_IFACE, serCmdIOBuf);
+  }
 } // handleOpenRequest
 
 void Interface::handleCloseRequest(void) {
@@ -519,11 +523,13 @@ void Interface::handleGetDataRequest(void) {
   }
   hasIECError |= unlistenError;
 
-  sprintf_P(
-      serCmdIOBuf,
-      (PGM_P)F("handleGetDataRequest completed for dev=%d chan=%d, error=%d"),
-      requestHeader[0], requestHeader[1], (int)hasIECError);
-  Log(Information, FAC_IFACE, serCmdIOBuf);
+  if (hasIECError) {
+    sprintf_P(
+        serCmdIOBuf,
+        (PGM_P)F("handleGetDataRequest completed for dev=%d chan=%d, error=%d"),
+        requestHeader[0], requestHeader[1], (int)hasIECError);
+    Log(Error, FAC_IFACE, serCmdIOBuf);
+  }
 } // handleGetDataRequest
 
 byte Interface::deviceModeHandler(void) {

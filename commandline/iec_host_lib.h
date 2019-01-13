@@ -5,8 +5,10 @@
 #ifndef IEC_HOST_LIB_H
 #define IEC_HOST_LIB_H
 
+#include <future>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <thread>
 
@@ -72,6 +74,10 @@ public:
   bool Initialize(IECStatus *status);
 
 private:
+  // RequestResult registers a promise with the background thread and returns
+  // a future on it.
+  std::future<std::string> RequestResult();
+
   // Run on the response background thread. Reads from arduino_writer_,
   // calls log_callback_ for log messages and dispatches responses.
   void ProcessResponses();
@@ -88,6 +94,9 @@ private:
   // Thread processing responses from the Arduino, including log messages.
   std::thread response_thread_;
 
+  // The current response promise. Will be updated for every incoming request.
+  std::promise<std::string> response_promise_;
+
   // Configured and used by the response thread to provide user identifiable
   // debug log channel names.
   std::map<char, std::string> debug_channel_map_;
@@ -95,9 +104,6 @@ private:
   // A pipe created in the constructor and used to signal to the background
   // thread that it should terminate execution.
   int tthread_pipe_[2];
-
-  // For testing.
-  friend class IECBusConnectionTest;
 };
 
 #endif // IEC_HOST_LIB_H

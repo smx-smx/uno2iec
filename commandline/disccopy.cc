@@ -25,7 +25,7 @@ int main(int argc, char *argv[]) {
       "serial",
       po::value<std::string>(&arduino_device)->default_value("/dev/ttyUSB0"),
       "serial interface to use")(
-      "speed", po::value<int>(&serial_speed)->default_value(115200),
+      "speed", po::value<int>(&serial_speed)->default_value(57600),
       "baud rate");
 
   po::variables_map vm;
@@ -54,8 +54,6 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  std::this_thread::sleep_for(4s);
-
   // Read from the command channel. This is always OK, the open
   // call is completely optional.
   std::string response;
@@ -63,39 +61,22 @@ int main(int argc, char *argv[]) {
     std::cout << "ReadFromChannel: " << status.message << std::endl;
     return 1;
   }
-  std::cout << "ReadFromChannel: response=" << response << std::endl;
-
-  // TODO(aeckleder): Commands do not currently block, so we have to
-  // wait a bit until they're done.
-  std::this_thread::sleep_for(1s);
+  std::cout << "Initial drive status: " << response << std::endl;
+  std::cout << "Formatting disc..." << std::endl;
 
   // Perform a full disk format, just to do something.
-  if (!connection->OpenChannel(9, 15, "N:MYDISC" /*"N:MYDISC,ID"*/, &status)) {
+  if (!connection->OpenChannel(9, 15, "N:MYDISC,ID" /*"N:MYDISC,ID"*/,
+                               &status)) {
     std::cout << "OpenChannel: " << status.message << std::endl;
     return 1;
   }
-
-  // TODO(aeckleder): Commands do not currently block, so we have to
-  // wait a bit until they're done.
-  std::this_thread::sleep_for(1s);
 
   // Get the result for the disc format.
   if (!connection->ReadFromChannel(9, 15, &response, &status)) {
     std::cout << "ReadFromChannel: " << status.message << std::endl;
     return 1;
   }
-  std::cout << "ReadFromChannel: response=" << response << std::endl;
-
-  // TODO(aeckleder): Commands do not currently block, so we have to
-  // wait a bit until they're done.
-  std::this_thread::sleep_for(1s);
-
-  if (!connection->CloseChannel(9, 15, &status)) {
-    std::cout << "CloseChannel: " << status.message << std::endl;
-    return 1;
-  }
-
-  std::this_thread::sleep_for(2s);
+  std::cout << "Formatting status: " << response << std::endl;
 
   return 0;
 }

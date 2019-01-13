@@ -1,3 +1,4 @@
+#include <csignal>
 #include <fcntl.h>
 #include <iostream>
 #include <memory>
@@ -12,6 +13,8 @@
 
 #include "boost/format.hpp"
 #include "iec_host_lib.h"
+
+using namespace std::chrono_literals;
 
 // Maximum chars to read looking for '\r'. This is intentionally larger than
 // kConnectionStringPrefix, because it is followed by a version number.
@@ -50,6 +53,8 @@ IECBusConnection::IECBusConnection(int arduino_fd, LogCallback log_callback)
     : arduino_fd_(arduino_fd),
       arduino_writer_(std::make_unique<BufferedReadWriter>(arduino_fd)),
       log_callback_(log_callback) {
+  // Ignore broken pipes. They may just happen.
+  signal(SIGPIPE, SIG_IGN);
   assert(pipe(tthread_pipe_) == 0);
 }
 
@@ -75,6 +80,8 @@ bool IECBusConnection::Reset(IECStatus *status) {
   if (!arduino_writer_->WriteString(kCmdReset, status)) {
     return false;
   }
+  // Sleep for a bit to give the drive time to reset.
+  std::this_thread::sleep_for(2s);
   return true;
 }
 
@@ -92,12 +99,13 @@ bool IECBusConnection::OpenChannel(char device_number, char channel,
 
 bool IECBusConnection::ReadFromChannel(char device_number, char channel,
                                        std::string *result, IECStatus *status) {
+  // We expect to receive a result from this operation.
+  std::future<std::string> resp = RequestResult();
   std::string request_string = kCmdGetData + device_number + channel;
   if (!arduino_writer_->WriteString(request_string, status)) {
     return false;
   }
-  // TODO(aeckleder): Actually return the data rather than printing it
-  // to the log.
+  *result = resp.get();
   return true;
 }
 
@@ -164,6 +172,11 @@ bool IECBusConnection::Initialize(IECStatus *status) {
   return true;
 }
 
+std::future<std::string> IECBusConnection::RequestResult() {
+  response_promise_ = std::promise<std::string>();
+  return response_promise_.get_future();
+}
+
 void IECBusConnection::ProcessResponses() {
 
   fd_set rfds;
@@ -178,7 +191,7 @@ void IECBusConnection::ProcessResponses() {
     // Terminate the thread if we received the terminate signal. Don't bother
     // to actually read from the pipe, we don't really care.
     if (FD_ISSET(tthread_pipe_[0], &rfds))
-      break;
+      return;
 
     std::string read_string;
     IECStatus status;
@@ -201,6 +214,7 @@ void IECBusConnection::ProcessResponses() {
             (boost::format("Malformed channel configuration string '%s'") %
              read_string)
                 .str());
+        return;
       }
       debug_channel_map_[read_string[0]] = read_string.substr(1);
       break;
@@ -218,6 +232,7 @@ void IECBusConnection::ProcessResponses() {
             'E', "CLIENT",
             (boost::format("Malformed debug message '%s'") % read_string)
                 .str());
+        return;
       }
       log_callback_(read_string[0], debug_channel_map_[read_string[1]],
                     read_string.substr(2));
@@ -232,12 +247,9 @@ void IECBusConnection::ProcessResponses() {
       std::string unescaped_response;
       if (!UnescapeString(read_string, &unescaped_response, &status)) {
         log_callback_('E', "CLIENT", status.message);
-        break;
+        return;
       }
-      log_callback_('I', "RESPONSE",
-                    std::string("") +
-                        std::to_string(unescaped_response.size()) + ": \"" +
-                        unescaped_response + "\"");
+      response_promise_.set_value(unescaped_response);
     } break;
     default:
       // Ignore all other messages.
@@ -245,7 +257,7 @@ void IECBusConnection::ProcessResponses() {
                     (boost::format("Unknown response msg type %#x") %
                      static_cast<int>(read_string[0]))
                         .str());
-      break;
+      return;
     }
   }
 }

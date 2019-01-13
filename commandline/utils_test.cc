@@ -143,3 +143,26 @@ TEST_F(BufferedReadWriterTest, ReadUpTo) {
   EXPECT_TRUE(reader.ReadTerminatedString('\r', 256, &result, &status));
   EXPECT_EQ(result, "data") << status.message;
 }
+
+TEST(Utils, UnescapeStringTest) {
+  const std::string kValidEscapedString =
+      "This is a valid\\rescaped string with a \\\\.\r";
+  const std::string kValidUnescapedString =
+      "This is a valid\rescaped string with a \\.\r";
+
+  IECStatus status;
+  std::string result;
+  EXPECT_TRUE(UnescapeString(kValidEscapedString, &result, &status));
+  EXPECT_EQ(result, kValidUnescapedString);
+
+  const std::string kInvalidEscapedString =
+      "This is a valid\\rescaped \\string with a \\\\.\r";
+  EXPECT_FALSE(UnescapeString(kInvalidEscapedString, &result, &status));
+  EXPECT_EQ(status.status_code, IECStatus::INVALID_ARGUMENT) << status.message;
+  status.Clear();
+
+  const std::string kIncompleteEscapedString =
+      "This is a valid\\rescaped string with a \\\\.\r\\";
+  EXPECT_FALSE(UnescapeString(kIncompleteEscapedString, &result, &status));
+  EXPECT_EQ(status.status_code, IECStatus::INVALID_ARGUMENT) << status.message;
+}

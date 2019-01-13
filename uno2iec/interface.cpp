@@ -480,7 +480,8 @@ void Interface::handleGetDataRequest(void) {
     if (!(m_iec.state() bitand IEC::errorFlag)) {
       // We receive a valid byte. Make something of it.
       // TODO(aeckleder): Escape the data.
-      COMPORT.write(data);
+      byte escaped[2];
+      COMPORT.write(escaped, EscapeChar(data, escaped));
     } else {
       hasIECError = true;
       break;
@@ -846,3 +847,19 @@ void Interface::handleATNCmdClose() {
       m_iec.setDeviceNumber(serCmdIOBuf[1]);
   }
 } // handleATNCmdClose
+
+byte Interface::EscapeChar(byte input, byte *output) {
+  switch (input) {
+  case '\r':
+    output[0] = '\\';
+    output[1] = 'r';
+    return 2;
+  case '\\':
+    output[0] = '\\';
+    output[1] = '\\';
+    return 2;
+  default:
+    output[0] = input;
+    return 1;
+  }
+}

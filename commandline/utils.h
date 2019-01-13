@@ -42,6 +42,12 @@ void SetError(IECStatus::IECStatusCode status_code, const std::string &context,
 void SetErrorFromErrno(IECStatus::IECStatusCode status_code,
                        const std::string &context, IECStatus *status);
 
+// Unescape source into target, which is cleared first. Returns true if
+// successful.
+// In case of an error, returns false and sets status.
+bool UnescapeString(const std::string &source, std::string *target,
+                    IECStatus *status);
+
 // BufferedReadWriter can be used to read both terminated and fixed
 // character amounts from a file handle. It buffers reads internally,
 // writes are executed immediately. Note that file handle ownership is not

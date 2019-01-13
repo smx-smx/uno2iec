@@ -202,19 +202,29 @@ void IECBusConnection::ProcessResponses() {
       log_callback_(read_string[0], debug_channel_map_[read_string[1]],
                     read_string.substr(2));
       break;
-    case 'r':
+    case 'r': {
       // Standard data response message.
       if (!arduino_writer_->ReadTerminatedString('\r', kMaxLength, &read_string,
                                                  &status)) {
         log_callback_('E', "CLIENT", status.message);
         return;
       }
-      log_callback_('I', "RESPONSE", std::string("") +
-                                         std::to_string(read_string.size()) +
-                                         ": \"" + read_string + "\"");
-      break;
+      std::string unescaped_response;
+      if (!UnescapeString(read_string, &unescaped_response, &status)) {
+        log_callback_('E', "CLIENT", status.message);
+        break;
+      }
+      log_callback_('I', "RESPONSE",
+                    std::string("") +
+                        std::to_string(unescaped_response.size()) + ": \"" +
+                        unescaped_response + "\"");
+    } break;
     default:
       // Ignore all other messages.
+      log_callback_('E', "CLIENT",
+                    (boost::format("Unknown response msg type %#x") %
+                     static_cast<int>(read_string[0]))
+                        .str());
       break;
     }
   }

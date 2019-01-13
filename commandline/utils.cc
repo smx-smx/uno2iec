@@ -196,3 +196,41 @@ bool BufferedReadWriter::WriteString(const std::string &content,
   }
   return true;
 }
+
+bool UnescapeString(const std::string &source, std::string *target,
+                    IECStatus *status) {
+  target->clear();
+  for (auto it = source.begin(); it != source.end(); ++it) {
+    switch (*it) {
+    case '\\':
+      if (++it != source.end()) {
+        switch (*it) {
+        case 'r':
+          target->append(1, '\r');
+          break;
+        case '\\':
+          target->append(1, '\\');
+          break;
+        default:
+          SetError(
+              IECStatus::INVALID_ARGUMENT,
+              (boost::format("Invalid escape sequence '\\%c'") % *it).str(),
+              status);
+          return false;
+        }
+      } else {
+        SetError(IECStatus::INVALID_ARGUMENT,
+                 (boost::format("Incomplete escape sequence in string '%s'") %
+                  source)
+                     .str(),
+                 status);
+        return false;
+      }
+      break;
+    default:
+      target->append(1, *it);
+      break;
+    }
+  }
+  return true;
+}

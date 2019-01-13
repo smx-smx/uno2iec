@@ -49,7 +49,7 @@
 //
 //  The escape character is '\'. These are the
 //  valid escape sequences:
-//   '\' + '\r': Represents ASCII code 0x0D (carriage return) when contained
+//   '\' + 'r':  Represents ASCII code 0x0D (carriage return) when contained
 //               in the data stream.
 //   '\' + '\':  Represents ASCII code 0x5C (backslash) when contained in the
 //               data stream.
@@ -156,6 +156,12 @@ private:
   void handleATNCmdClose();
 
   void updateDateTime();
+
+  // Helper functions.
+
+  // Escape the specified input byte. Output must point to a memory region that
+  // can hold at least two bytes. Returns the number of bytes copied to output.
+  static byte EscapeChar(byte input, byte *output);
 
   // our iec low level driver:
   IEC &m_iec;

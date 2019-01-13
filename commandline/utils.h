@@ -22,6 +22,9 @@ struct IECStatus {
     message.clear();
   }
 
+  // Returns true if the status was OK.
+  bool ok() const { return status_code == OK; };
+
   enum IECStatusCode {
     OK = 0x00,
     UNIMPLEMENTED = 0x01,
@@ -78,6 +81,9 @@ public:
   // Writes the specified content, with no terminator such as the null character
   // or newline. Returns true if successful, sets status otherwise.
   bool WriteString(const std::string &content, IECStatus *status);
+
+  // Returns true if some data is currently in the buffer, false otherwise.
+  bool HasBufferedData() const { return data_end_ - data_start_ > 0; }
 
 private:
   // Looks for a terminator within [search_from, search_to).

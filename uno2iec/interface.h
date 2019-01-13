@@ -40,6 +40,11 @@
 // '!': Register logging facility. (same as device mode).
 // 'r': Standard host mode data response, followed by an escaped data stream
 //      as described below (and terminated by '\r').
+// 's': Standard host mode status response, followed by a string describing
+//      the status (not escaped, terminated by '\r'). An empty status string
+//      means
+//      success. A status response confirms that a requested command
+//      has been executed either successfully or with an error.
 //
 // Escaping rules:
 //  Response data is escaped and terminated by '\r' to avoid having to specify
@@ -121,22 +126,24 @@ private:
 
   //
   // The following methods are host mode specific.
+  // All of them return a status string allocated in
+  // flash. It will be an empty stringif successful.
   //
 
   // Handle an open request coming in via serial line.
   // Reads remaining arguments from the serial line
   // and sends a corresponding request to the bus.
-  void handleOpenRequest();
+  const char *handleOpenRequest();
 
   // Handle a close request coming in via serial line.
   // Reads remaining arguments from the serial line
   // and sends a corresponding request to the bus.
-  void handleCloseRequest();
+  const char *handleCloseRequest();
 
   // Handle a get data request coming in via serial line.
   // Reads remaining arguments from the serial line
   // and sends a corresponding request to the bus.
-  void handleGetDataRequest();
+  const char *handleGetDataRequest();
 
   //
   // The following methods are device mode specific.

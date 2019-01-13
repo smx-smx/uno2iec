@@ -76,7 +76,7 @@ public:
 private:
   // RequestResult registers a promise with the background thread and returns
   // a future on it.
-  std::future<std::string> RequestResult();
+  std::future<std::pair<std::string, IECStatus>> RequestResult();
 
   // Run on the response background thread. Reads from arduino_writer_,
   // calls log_callback_ for log messages and dispatches responses.
@@ -95,7 +95,7 @@ private:
   std::thread response_thread_;
 
   // The current response promise. Will be updated for every incoming request.
-  std::promise<std::string> response_promise_;
+  std::promise<std::pair<std::string, IECStatus>> response_promise_;
 
   // Configured and used by the response thread to provide user identifiable
   // debug log channel names.

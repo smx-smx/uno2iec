@@ -303,6 +303,7 @@ byte Interface::handler() {
 byte Interface::hostModeHandler(void) {
   char cmd;
   if (COMPORT.readBytes(&cmd, 1) == 1) {
+    const char *result = (PGM_P)F("");
     // We received a command via serial link.
     switch (cmd) {
     case 'r':
@@ -312,31 +313,40 @@ byte Interface::hostModeHandler(void) {
       Log(Information, FAC_IFACE, serCmdIOBuf);
       break;
     case 'o':
-      handleOpenRequest();
+      result = handleOpenRequest();
       break;
     case 'c':
-      handleCloseRequest();
+      result = handleCloseRequest();
       break;
     case 'g':
-      handleGetDataRequest();
+      result = handleGetDataRequest();
       break;
     default:
       strcpy_P(serCmdIOBuf, (PGM_P)F("UNKNOWN SERIAL COMMAND"));
       Log(Error, FAC_IFACE, serCmdIOBuf);
+      result = (PGM_P)F("Unknown command");
       break;
     }
+
+    // Write out the status response.
+    COMPORT.write('s');
+    strcpy_P(serCmdIOBuf, result);
+    COMPORT.write(serCmdIOBuf);
+    COMPORT.write('\r');
   }
+
   return IEC::ATN_IDLE;
 } // hostModeHandler
 
-void Interface::handleOpenRequest(void) {
+const char *Interface::handleOpenRequest(void) {
+  const char *result = (PGM_P)F("");
   char requestHeader[3];
   if (COMPORT.readBytes(requestHeader, 3) != 3) {
     // Didn't receive the full sequence within our timeout. This is some kind of
-    strcpy_P(serCmdIOBuf,
-             (PGM_P)F("Received incomplete open command on serial line."));
+    result = (PGM_P)F("Received incomplete open command on serial line.");
+    strcpy_P(serCmdIOBuf, result);
     Log(Error, FAC_IFACE, serCmdIOBuf);
-    return;
+    return result;
   }
   if (requestHeader[2] > 0) {
     int numRead = COMPORT.readBytes(serCmdIOBuf, requestHeader[2]);
@@ -346,7 +356,7 @@ void Interface::handleOpenRequest(void) {
                          "line: requestHeader[2]=%d, actual=%d"),
                 requestHeader[2], numRead);
       Log(Error, FAC_IFACE, serCmdIOBuf);
-      return;
+      return (PGM_P)F("Received incomplete open command on serial line.");
     }
     serCmdIOBuf[requestHeader[2]] = 0;
   }
@@ -362,6 +372,7 @@ void Interface::handleOpenRequest(void) {
         (PGM_P)F("Sending ATN LISTEN + ATN OPEN failed for dev=%d chan=%d"),
         requestHeader[0], requestHeader[1]);
     Log(Error, FAC_IFACE, serCmdIOBuf);
+    result = (PGM_P)F("Sending ATN LISTEN + OPEN failed.");
   }
   noInterrupts();
 
@@ -381,6 +392,7 @@ void Interface::handleOpenRequest(void) {
     sprintf_P(buf, (PGM_P)F("byte %d of cmd failed,dev=%d, cmd='%s'"), i - 1,
               requestHeader[0], serCmdIOBuf);
     Log(Error, FAC_IFACE, buf);
+    return (PGM_P)F("Sending data to IEC bus failed.");
   }
   noInterrupts();
 
@@ -392,6 +404,7 @@ void Interface::handleOpenRequest(void) {
     sprintf_P(serCmdIOBuf, (PGM_P)F("Sending ATN UNLISTEN failed for dev=%d"),
               requestHeader[0]);
     Log(Error, FAC_IFACE, serCmdIOBuf);
+    return (PGM_P)F("Sending ATN UNLISTEN failed.");
   }
   hasIECError |= unlistenError;
 
@@ -402,16 +415,18 @@ void Interface::handleOpenRequest(void) {
         requestHeader[0], requestHeader[1], (int)hasIECError);
     Log(Error, FAC_IFACE, serCmdIOBuf);
   }
+  return result;
 } // handleOpenRequest
 
-void Interface::handleCloseRequest(void) {
+const char *Interface::handleCloseRequest(void) {
+  const char *result = (PGM_P)F("");
   char requestHeader[2];
   if (COMPORT.readBytes(requestHeader, 2) != 2) {
+    result = (PGM_P)F("Received incomplete close command on serial line.");
     // Didn't receive the full sequence within our timeout. This is some kind of
-    strcpy_P(serCmdIOBuf,
-             (PGM_P)F("Received incomplete close command on serial line."));
+    strcpy_P(serCmdIOBuf, result);
     Log(Error, FAC_IFACE, serCmdIOBuf);
-    return;
+    return result;
   }
   noInterrupts();
   boolean hasIECError =
@@ -425,6 +440,7 @@ void Interface::handleCloseRequest(void) {
         (PGM_P)F("Sending ATN LISTEN + ATN CLOSE failed for dev=%d chan=%d"),
         requestHeader[0], requestHeader[1]);
     Log(Error, FAC_IFACE, serCmdIOBuf);
+    return (PGM_P)F("Sending ATN LISTEN + CLOSE failed.");
   }
 
   noInterrupts();
@@ -444,16 +460,18 @@ void Interface::handleCloseRequest(void) {
       (PGM_P)F("handleCloseRequest completed for dev=%d chan=%d, error=%d"),
       requestHeader[0], requestHeader[1], (int)hasIECError);
   Log(Information, FAC_IFACE, serCmdIOBuf);
+  return result;
 } // handleCloseRequest
 
-void Interface::handleGetDataRequest(void) {
+const char *Interface::handleGetDataRequest(void) {
+  const char *result = (PGM_P)F("");
   char requestHeader[2];
   if (COMPORT.readBytes(requestHeader, 2) != 2) {
     // Didn't receive the full sequence within our timeout. This is some kind of
-    strcpy_P(serCmdIOBuf,
-             (PGM_P)F("Received incomplete get data command on serial line."));
+    result = (PGM_P)F("Received incomplete get data command on serial line.");
+    strcpy_P(serCmdIOBuf, result);
     Log(Error, FAC_IFACE, serCmdIOBuf);
-    return;
+    return result;
   }
   noInterrupts();
   boolean hasIECError =
@@ -473,6 +491,7 @@ void Interface::handleGetDataRequest(void) {
         (PGM_P)F("Sending ATN TALK + ATN CODE DATA failed for dev=%d chan=%d"),
         requestHeader[0], requestHeader[1]);
     Log(Error, FAC_IFACE, serCmdIOBuf);
+    return (PGM_P)F("Failed to send ATN TALK + CODE_DATA");
   }
 
   int i = 0;
@@ -509,6 +528,7 @@ void Interface::handleGetDataRequest(void) {
     sprintf_P(buf, (PGM_P)F("reading byte %d failed, dev=%d"), i,
               requestHeader[0]);
     Log(Error, FAC_IFACE, buf);
+    result = (PGM_P)F("Read error reading from IEC bus");
   }
   noInterrupts();
 
@@ -520,6 +540,7 @@ void Interface::handleGetDataRequest(void) {
     sprintf_P(serCmdIOBuf, (PGM_P)F("Sending ATN UNTALK failed for dev=%d"),
               requestHeader[0]);
     Log(Error, FAC_IFACE, serCmdIOBuf);
+    result = (PGM_P)F("Sending ATN UNTALK failed");
   }
   hasIECError |= unlistenError;
 
@@ -530,6 +551,7 @@ void Interface::handleGetDataRequest(void) {
         requestHeader[0], requestHeader[1], (int)hasIECError);
     Log(Error, FAC_IFACE, serCmdIOBuf);
   }
+  return result;
 } // handleGetDataRequest
 
 byte Interface::deviceModeHandler(void) {

@@ -65,8 +65,7 @@ int main(int argc, char *argv[]) {
   std::cout << "Formatting disc..." << std::endl;
 
   // Perform a full disk format, just to do something.
-  if (!connection->OpenChannel(9, 15, "N:MYDISC,ID" /*"N:MYDISC,ID"*/,
-                               &status)) {
+  if (!connection->OpenChannel(9, 15, "N:MYDISC" /*"N:MYDISC,ID"*/, &status)) {
     std::cout << "OpenChannel: " << status.message << std::endl;
     return 1;
   }

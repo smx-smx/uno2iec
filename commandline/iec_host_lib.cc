@@ -77,45 +77,71 @@ IECBusConnection::~IECBusConnection() {
 }
 
 bool IECBusConnection::Reset(IECStatus *status) {
+  auto f = RequestResult();
   if (!arduino_writer_->WriteString(kCmdReset, status)) {
     return false;
   }
   // Sleep for a bit to give the drive time to reset.
   std::this_thread::sleep_for(2s);
-  return true;
+  auto r = f.get();
+  if (r.second.ok()) {
+    return true;
+  } else {
+    *status = r.second;
+    return false;
+  }
 }
 
 bool IECBusConnection::OpenChannel(char device_number, char channel,
                                    const std::string &cmd_string,
                                    IECStatus *status) {
+  auto f = RequestResult();
   std::string request_string = kCmdOpen + device_number + channel +
                                static_cast<char>(cmd_string.size()) +
                                cmd_string;
   if (!arduino_writer_->WriteString(request_string, status)) {
     return false;
   }
-  return true;
+  auto r = f.get();
+  if (r.second.ok()) {
+    return true;
+  } else {
+    *status = r.second;
+    return false;
+  }
 }
 
 bool IECBusConnection::ReadFromChannel(char device_number, char channel,
                                        std::string *result, IECStatus *status) {
-  // We expect to receive a result from this operation.
-  std::future<std::string> resp = RequestResult();
+  auto f = RequestResult();
   std::string request_string = kCmdGetData + device_number + channel;
   if (!arduino_writer_->WriteString(request_string, status)) {
     return false;
   }
-  *result = resp.get();
-  return true;
+  auto r = f.get();
+  if (r.second.ok()) {
+    *result = r.first;
+    return true;
+  } else {
+    *status = r.second;
+    return false;
+  }
 }
 
 bool IECBusConnection::CloseChannel(char device_number, char channel,
                                     IECStatus *status) {
+  auto f = RequestResult();
   std::string request_string = kCmdClose + device_number + channel;
   if (!arduino_writer_->WriteString(request_string, status)) {
     return false;
   }
-  return true;
+  auto r = f.get();
+  if (r.second.ok()) {
+    return true;
+  } else {
+    *status = r.second;
+    return false;
+  }
 }
 
 bool IECBusConnection::Initialize(IECStatus *status) {
@@ -172,26 +198,34 @@ bool IECBusConnection::Initialize(IECStatus *status) {
   return true;
 }
 
-std::future<std::string> IECBusConnection::RequestResult() {
-  response_promise_ = std::promise<std::string>();
+std::future<std::pair<std::string, IECStatus>>
+IECBusConnection::RequestResult() {
+  response_promise_ = std::promise<std::pair<std::string, IECStatus>>();
   return response_promise_.get_future();
 }
 
 void IECBusConnection::ProcessResponses() {
 
   fd_set rfds;
+  // Remember the last response we received. We'll return it along
+  // with the status once we have it.
+  std::string last_response;
   while (true) {
-    FD_ZERO(&rfds);
-    FD_SET(arduino_fd_, &rfds);
-    FD_SET(tthread_pipe_[0], &rfds);
+    if (!arduino_writer_->HasBufferedData()) {
+      // If we don't have any more buffered data, see if we can get more data
+      // from the file descriptor or if our thread should be cancelled.
+      FD_ZERO(&rfds);
+      FD_SET(arduino_fd_, &rfds);
+      FD_SET(tthread_pipe_[0], &rfds);
 
-    int select_result = select(std::max(arduino_fd_, tthread_pipe_[0]) + 1,
-                               &rfds, nullptr, nullptr, nullptr);
-    assert(select_result > 0);
-    // Terminate the thread if we received the terminate signal. Don't bother
-    // to actually read from the pipe, we don't really care.
-    if (FD_ISSET(tthread_pipe_[0], &rfds))
-      return;
+      int select_result = select(std::max(arduino_fd_, tthread_pipe_[0]) + 1,
+                                 &rfds, nullptr, nullptr, nullptr);
+      assert(select_result > 0);
+      // Terminate the thread if we received the terminate signal. Don't bother
+      // to actually read from the pipe, we don't really care.
+      if (FD_ISSET(tthread_pipe_[0], &rfds))
+        return;
+    }
 
     std::string read_string;
     IECStatus status;
@@ -249,7 +283,24 @@ void IECBusConnection::ProcessResponses() {
         log_callback_('E', "CLIENT", status.message);
         return;
       }
-      response_promise_.set_value(unescaped_response);
+      last_response = unescaped_response;
+    } break;
+    case 's': {
+      // Standard status response message.
+      if (!arduino_writer_->ReadTerminatedString('\r', kMaxLength, &read_string,
+                                                 &status)) {
+        log_callback_('E', "CLIENT", status.message);
+        return;
+      }
+      IECStatus iecStatus;
+      if (!read_string.empty()) {
+        // We can use the status string directly, it isn't escaped.
+        SetError(IECStatus::CONNECTION_FAILURE, read_string, &iecStatus);
+      }
+      response_promise_.set_value(
+          std::pair<std::string, IECStatus>(last_response, iecStatus));
+      // Forget the last response so we won't return it again.
+      last_response.clear();
     } break;
     default:
       // Ignore all other messages.

@@ -82,9 +82,7 @@ protected:
         }
       }
       if (response.size() > 0) {
-        // TODO(aeckleder): Right now, this write can fail because the requester
-        // doesn't actually block on receiving it. Re-enable EXPECT_TRUE here.
-        writer.WriteString(response, &status);
+        EXPECT_TRUE(writer.WriteString(response, &status)) << status.message;
       }
     }
   }
@@ -109,17 +107,18 @@ TEST_F(IECBusConnectionTest, BasicProtocolTest) {
       pipefd_[0],
       [](char level, const std::string &channel, const std::string &message) {
         // We'd like to learn about errors we produce.
-        EXPECT_NE(level, 'E') << level << ":" << channel << ": " << message;
+        ASSERT_NE(level, 'E') << level << ":" << channel << ": " << message;
         std::cout << level << ":" << channel << ":" << message;
       });
-  AddRequestResponse("r", "");
+  AddRequestResponse("r", "s\r");
   AddRequestResponse(
       (boost::format("o%c%c%cN:SOMEDISC,ID") % char(8) % char(15) % char(13))
           .str(),
-      "");
-  AddRequestResponse((boost::format("c%c%c") % char(8) % char(15)).str(), "");
+      "s\r");
+  AddRequestResponse((boost::format("c%c%c") % char(8) % char(15)).str(),
+                     "s\r");
   AddRequestResponse((boost::format("g%c%c") % char(8) % char(15)).str(),
-                     "r00, OK,00,00\\r\r");
+                     "r00, OK,00,00\\r\rs\r");
   IECStatus status;
   EXPECT_TRUE(bus_conn.Initialize(&status)) << status.message;
   EXPECT_TRUE(bus_conn.Reset(&status));

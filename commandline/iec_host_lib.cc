@@ -49,9 +49,15 @@ static const std::string kCmdGetData =
 IECBusConnection::IECBusConnection(int arduino_fd, LogCallback log_callback)
     : arduino_fd_(arduino_fd),
       arduino_writer_(std::make_unique<BufferedReadWriter>(arduino_fd)),
-      log_callback_(log_callback) {}
+      log_callback_(log_callback) {
+  assert(pipe(tthread_pipe_) == 0);
+}
 
 IECBusConnection::~IECBusConnection() {
+  // It doesn't really matter what we write here, but writing
+  // to tthread_pipe_ will tell the background thread to shutdown.
+  char tsym = 't';
+  assert(write(tthread_pipe_[1], &tsym, 1) == 1);
   if (response_thread_.joinable()) {
     // Step response processing.
     response_thread_.join();
@@ -61,6 +67,8 @@ IECBusConnection::~IECBusConnection() {
     close(arduino_fd_);
     arduino_fd_ = -1;
   }
+  close(tthread_pipe_[0]);
+  close(tthread_pipe_[1]);
 }
 
 bool IECBusConnection::Reset(IECStatus *status) {
@@ -157,9 +165,21 @@ bool IECBusConnection::Initialize(IECStatus *status) {
 }
 
 void IECBusConnection::ProcessResponses() {
-  // TODO(aeckleder): Infinithread. Don't block on first character reads and
-  // introduce quit conditional to shut down the background thread.
+
+  fd_set rfds;
   while (true) {
+    FD_ZERO(&rfds);
+    FD_SET(arduino_fd_, &rfds);
+    FD_SET(tthread_pipe_[0], &rfds);
+
+    int select_result = select(std::max(arduino_fd_, tthread_pipe_[0]) + 1,
+                               &rfds, nullptr, nullptr, nullptr);
+    assert(select_result > 0);
+    // Terminate the thread if we received the terminate signal. Don't bother
+    // to actually read from the pipe, we don't really care.
+    if (FD_ISSET(tthread_pipe_[0], &rfds))
+      break;
+
     std::string read_string;
     IECStatus status;
 

@@ -91,6 +91,13 @@ private:
   // Configured and used by the response thread to provide user identifiable
   // debug log channel names.
   std::map<char, std::string> debug_channel_map_;
+
+  // A pipe created in the constructor and used to signal to the background
+  // thread that it should terminate execution.
+  int tthread_pipe_[2];
+
+  // For testing.
+  friend class IECBusConnectionTest;
 };
 
 #endif // IEC_HOST_LIB_H

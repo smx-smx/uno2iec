@@ -16,6 +16,17 @@ cc_library(
     ],
 )
 
+cc_test(
+    name = "iec_host_lib_test",
+    srcs = [
+        "iec_host_lib_test.cc",
+    ],
+    deps = [
+        ":iec_host_lib",
+        "@com_github_google_googletest//:gtest_main",
+    ],
+)
+
 cc_library(
     name = "utils",
     srcs = [

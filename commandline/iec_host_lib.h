@@ -35,13 +35,24 @@ public:
 
   // Open channel on the device with the specific device_number. The optional
   // data_string specifies data to send to the channel, e.g. a filename.
-  // Returns true on success. In case of an error, status will be
-  // set to an appropriate error status.
+  // Its maximum size is 255 bytes. Returns true on success. In case of an
+  // error,
+  // status will be set to an appropriate error status.
   bool OpenChannel(char device_number, char channel,
                    const std::string &data_string, IECStatus *status);
 
+  // Read from device_number, channel until an EOI is found or an error
+  // occurred.
+  // Sets *result to be the resulting string and returns true. If an error is
+  // found, sets status and returns false.
   bool ReadFromChannel(char device_number, char channel, std::string *result,
                        IECStatus *status);
+
+  // Write data_string to device_number, channel. Returns true if successful,
+  // sets status and returns false otherwise. If data_string has > 256 bytes,
+  // multiple requests will be generated.
+  bool WriteToChannel(char device_number, char channel,
+                      const std::string &data_string, IECStatus *status);
 
   // Close channel on the device with the specific device_number.
   // Returns true on success. In case of an error, status will be

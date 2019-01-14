@@ -10,6 +10,24 @@
 #include "iec_host_lib.h"
 #include "gtest/gtest.h"
 
+static std::string Escape(const std::string &unescaped) {
+  std::string result;
+  for (const auto &c : unescaped) {
+    switch (c) {
+    case '\r':
+      result += "\\r";
+      break;
+    case '\\':
+      result += "\\\\";
+      break;
+    default:
+      result += c;
+      break;
+    }
+  }
+  return result;
+}
+
 class IECBusConnectionTest : public ::testing::Test {
 protected:
   void SetUp() override {
@@ -49,15 +67,20 @@ protected:
       std::string params;
       switch (r[0]) {
       case 'r':
-        // No additional parameters to read.
+        // No additional parameters to reset.
         break;
-      case 'o': {
+      case 'o':
+      case 'p': {
         // Size of the command string is variable. Read fixed extra data first,
         // then read the command string.
         if (!writer.ReadUpTo(3, 3, &params, &status))
           return;
         std::string cmd_string;
-        if (!writer.ReadUpTo(params[2], params[2], &cmd_string, &status))
+        int num_read = params[2];
+        if (r[0] == 'p' && num_read == 0) {
+          num_read = 256;
+        }
+        if (!writer.ReadUpTo(num_read, num_read, &cmd_string, &status))
           return;
         r = r + params + cmd_string;
       } break;
@@ -67,6 +90,8 @@ protected:
           return;
         r = r + params;
         break;
+      default:
+        EXPECT_TRUE(false) << "Unknown command: " << Escape(r) << std::endl;
       }
 
       // r now contains the entire request string. Try to match it to a
@@ -90,7 +115,8 @@ protected:
   void AddRequestResponse(const std::string &req, const std::string &resp) {
     std::lock_guard<std::mutex> lock(request_response_map_m_);
     request_response_map_.emplace(req, resp);
-    std::cout << "Adding '" << req << "' -> '" << resp << "'" << std::endl;
+    std::cout << "Adding '" << Escape(req) << "' -> '" << Escape(resp) << "'"
+              << std::endl;
   }
 
   std::thread producer_;
@@ -119,6 +145,22 @@ TEST_F(IECBusConnectionTest, BasicProtocolTest) {
                      "s\r");
   AddRequestResponse((boost::format("g%c%c") % char(8) % char(15)).str(),
                      "r00, OK,00,00\\r\rs\r");
+  AddRequestResponse(
+      (boost::format("p%c%c%c1234567890123456789012345678901234567890"
+                     "1234567890123456789012345678901234567890"
+                     "1234567890123456789012345678901234567890"
+                     "1234567890123456789012345678901234567890"
+                     "1234567890123456789012345678901234567890"
+                     "1234567890123456789012345678901234567890"
+                     "1234567890123456") %
+       char(8) % char(15) % char(0))
+          .str(),
+      "s\r");
+  AddRequestResponse(
+      (boost::format("p%c%c%c1234567890") % char(8) % char(15) % char(10))
+          .str(),
+      "s\r");
+
   IECStatus status;
   EXPECT_TRUE(bus_conn.Initialize(&status)) << status.message;
   EXPECT_TRUE(bus_conn.Reset(&status));
@@ -126,5 +168,15 @@ TEST_F(IECBusConnectionTest, BasicProtocolTest) {
   std::string response;
   EXPECT_TRUE(bus_conn.ReadFromChannel(8, 15, &response, &status));
   EXPECT_EQ(response, "00, OK,00,00\r");
+  // Write more data than fits into a single packet.
+  EXPECT_TRUE(bus_conn.WriteToChannel(8, 15,
+                                      "1234567890123456789012345678901234567890"
+                                      "1234567890123456789012345678901234567890"
+                                      "1234567890123456789012345678901234567890"
+                                      "1234567890123456789012345678901234567890"
+                                      "1234567890123456789012345678901234567890"
+                                      "1234567890123456789012345678901234567890"
+                                      "12345678901234561234567890",
+                                      &status));
   EXPECT_TRUE(bus_conn.CloseChannel(8, 15, &status));
 }

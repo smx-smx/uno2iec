@@ -31,6 +31,9 @@
 //      <num data bytes>, <data to send to the channel>
 // 'g': Get data from a channel. The following bytes are <device number>,
 //      <channel>. The response is encoded as described below.
+// 'p': Put data onto a channel. The following bytes are <device number>,
+//      <channel>, <num data bytes>, <data to send to the channel>.
+//      If <data to send to the channel> is 0, we expect 256 bytes of data.
 // 'c': Close a channel. The following bytes are <device number>, <channel>.
 //
 // Host mode responses
@@ -130,10 +133,11 @@ private:
   // flash. It will be an empty stringif successful.
   //
 
-  // Handle an open request coming in via serial line.
-  // Reads remaining arguments from the serial line
-  // and sends a corresponding request to the bus.
-  const char *handleOpenRequest();
+  // Handle an open or put data request (depending on cmd)
+  // coming in via serial line. Reads remaining arguments from
+  // the serial line and sends a corresponding request
+  // to the bus.
+  const char *handleOpenOrPutDataRequest(IEC::ATNCommand cmd);
 
   // Handle a close request coming in via serial line.
   // Reads remaining arguments from the serial line
@@ -144,6 +148,11 @@ private:
   // Reads remaining arguments from the serial line
   // and sends a corresponding request to the bus.
   const char *handleGetDataRequest();
+
+  // Handle a put data request coming in via serial line.
+  // Reads remaining arguments from the serial line
+  // and sends a corresponding request to the bus.
+  const char *handlePutDataRequest();
 
   //
   // The following methods are device mode specific.

@@ -20,6 +20,9 @@ using namespace std::chrono_literals;
 // kConnectionStringPrefix, because it is followed by a version number.
 static const size_t kMaxLength = 256;
 
+// Maximum size of one data packet sent to the Arduino.
+static const size_t kMaxSendPacketSize = 256;
+
 static const std::string kConnectionStringPrefix = "connect_arduino:";
 
 // Needs to support host mode.
@@ -48,6 +51,8 @@ static const std::string kCmdOpen = "o";  // Open a channel on a device.
 static const std::string kCmdClose = "c"; // Close a channel on a device.
 static const std::string kCmdGetData =
     "g"; // Get data from a channel on a device.
+static const std::string kCmdPutData =
+    "p"; // Put data onto a channel on a device.
 
 IECBusConnection::IECBusConnection(int arduino_fd, LogCallback log_callback)
     : arduino_fd_(arduino_fd),
@@ -126,6 +131,34 @@ bool IECBusConnection::ReadFromChannel(char device_number, char channel,
     *status = r.second;
     return false;
   }
+}
+
+bool IECBusConnection::WriteToChannel(char device_number, char channel,
+                                      const std::string &data_string,
+                                      IECStatus *status) {
+  // Empty string, we're done.
+  if (data_string.empty())
+    return true;
+
+  size_t curr_pos = 0;
+  while (curr_pos < data_string.size()) {
+    auto f = RequestResult();
+    size_t to_write =
+        std::min(data_string.size() - curr_pos, kMaxSendPacketSize);
+    std::string request_string = kCmdPutData + device_number + channel +
+                                 static_cast<char>(to_write) +
+                                 data_string.substr(curr_pos, to_write);
+    if (!arduino_writer_->WriteString(request_string, status)) {
+      return false;
+    }
+    auto r = f.get();
+    if (!r.second.ok()) {
+      *status = r.second;
+      return false;
+    }
+    curr_pos += to_write;
+  }
+  return true;
 }
 
 bool IECBusConnection::CloseChannel(char device_number, char channel,

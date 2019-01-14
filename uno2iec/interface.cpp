@@ -313,13 +313,16 @@ byte Interface::hostModeHandler(void) {
       Log(Information, FAC_IFACE, serCmdIOBuf);
       break;
     case 'o':
-      result = handleOpenRequest();
+      result = handleOpenOrPutDataRequest(IEC::ATN_CODE_OPEN);
       break;
     case 'c':
       result = handleCloseRequest();
       break;
     case 'g':
       result = handleGetDataRequest();
+      break;
+    case 'p':
+      result = handleOpenOrPutDataRequest(IEC::ATN_CODE_DATA);
       break;
     default:
       strcpy_P(serCmdIOBuf, (PGM_P)F("UNKNOWN SERIAL COMMAND"));
@@ -338,47 +341,56 @@ byte Interface::hostModeHandler(void) {
   return IEC::ATN_IDLE;
 } // hostModeHandler
 
-const char *Interface::handleOpenRequest(void) {
+const char *Interface::handleOpenOrPutDataRequest(IEC::ATNCommand cmd) {
   const char *result = (PGM_P)F("");
   char requestHeader[3];
   if (COMPORT.readBytes(requestHeader, 3) != 3) {
     // Didn't receive the full sequence within our timeout. This is some kind of
-    result = (PGM_P)F("Received incomplete open command on serial line.");
+    result =
+        (PGM_P)F("Received incomplete open/put data command on serial line.");
     strcpy_P(serCmdIOBuf, result);
     Log(Error, FAC_IFACE, serCmdIOBuf);
     return result;
   }
-  if (requestHeader[2] > 0) {
-    int numRead = COMPORT.readBytes(serCmdIOBuf, requestHeader[2]);
-    if (numRead != requestHeader[2]) {
+  int dataSize = requestHeader[2];
+  if (cmd == IEC::ATN_CODE_DATA && dataSize == 0) {
+    // If this is a pure data command, zero doesn't make any sense.
+    // We'll therefore redefine zero to mean 256, so we can transfer a complete
+    // sector
+    // in one request.
+    dataSize = 256;
+  }
+  if (dataSize > 0) {
+    int numRead = COMPORT.readBytes(serCmdIOBuf, dataSize);
+    if (numRead != dataSize) {
       sprintf_P(serCmdIOBuf,
-                (PGM_P)F("Received incomplete extra data for open on serial "
-                         "line: requestHeader[2]=%d, actual=%d"),
-                requestHeader[2], numRead);
+                (PGM_P)F("Received incomplete extra data for open/put data on "
+                         "serial line: dataSize=%d, actual=%d"),
+                dataSize, numRead);
       Log(Error, FAC_IFACE, serCmdIOBuf);
-      return (PGM_P)F("Received incomplete open command on serial line.");
+      return (PGM_P)F(
+          "Received incomplete open / put data command on serial line.");
     }
-    serCmdIOBuf[requestHeader[2]] = 0;
   }
   noInterrupts();
-  boolean hasIECError =
-      !m_iec.sendATNToChannel(requestHeader[0], requestHeader[1],
-                              IEC::ATN_CODE_LISTEN, IEC::ATN_CODE_OPEN);
+  boolean hasIECError = !m_iec.sendATNToChannel(
+      requestHeader[0], requestHeader[1], IEC::ATN_CODE_LISTEN, cmd);
   interrupts();
   if (hasIECError) {
     // Sending ATN Open failed.
     sprintf_P(
         serCmdIOBuf,
-        (PGM_P)F("Sending ATN LISTEN + ATN OPEN failed for dev=%d chan=%d"),
+        (PGM_P)F(
+            "Sending ATN LISTEN + ATN OPEN/DATA failed for dev=%d chan=%d"),
         requestHeader[0], requestHeader[1]);
     Log(Error, FAC_IFACE, serCmdIOBuf);
-    result = (PGM_P)F("Sending ATN LISTEN + OPEN failed.");
+    result = (PGM_P)F("Sending ATN LISTEN + OPEN/DATA failed.");
   }
   noInterrupts();
 
   int i = 0;
-  for (i = 0; i < requestHeader[2] && !hasIECError; ++i) {
-    if (i < requestHeader[2] - 1) {
+  for (i = 0; i < dataSize && !hasIECError; ++i) {
+    if (i < dataSize - 1) {
       hasIECError = !m_iec.send(serCmdIOBuf[i]);
     } else {
       // Send the last character with an EOI.
@@ -396,8 +408,7 @@ const char *Interface::handleOpenRequest(void) {
   }
   noInterrupts();
 
-  boolean unlistenError =
-      !m_iec.sendATNToDevice(/*requestHeader[0]*/ 0, IEC::ATN_CODE_UNLISTEN);
+  boolean unlistenError = !m_iec.sendATNToDevice(0, IEC::ATN_CODE_UNLISTEN);
   interrupts();
   if (unlistenError) {
     // Sending ATN Open failed.
@@ -409,14 +420,13 @@ const char *Interface::handleOpenRequest(void) {
   hasIECError |= unlistenError;
 
   if (hasIECError) {
-    sprintf_P(
-        serCmdIOBuf,
-        (PGM_P)F("handleOpenRequest completed for dev=%d chan=%d, error=%d"),
-        requestHeader[0], requestHeader[1], (int)hasIECError);
+    sprintf_P(serCmdIOBuf, (PGM_P)F("handleOpenOrPutDataRequest completed for "
+                                    "dev=%d chan=%d, error=%d"),
+              requestHeader[0], requestHeader[1], (int)hasIECError);
     Log(Error, FAC_IFACE, serCmdIOBuf);
   }
   return result;
-} // handleOpenRequest
+} // handleOpenOrPutDataRequest
 
 const char *Interface::handleCloseRequest(void) {
   const char *result = (PGM_P)F("");

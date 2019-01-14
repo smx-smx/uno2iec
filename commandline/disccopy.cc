@@ -54,8 +54,7 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  // Read from the command channel. This is always OK, the open
-  // call is completely optional.
+  // Accessing the command channel is always ok, no open call necessary.
   std::string response;
   if (!connection->ReadFromChannel(9, 15, &response, &status)) {
     std::cout << "ReadFromChannel: " << status.message << std::endl;
@@ -64,9 +63,22 @@ int main(int argc, char *argv[]) {
   std::cout << "Initial drive status: " << response << std::endl;
   std::cout << "Formatting disc..." << std::endl;
 
-  // Perform a full disk format, just to do something.
-  if (!connection->OpenChannel(9, 15, "N:MYDISC" /*"N:MYDISC,ID"*/, &status)) {
-    std::cout << "OpenChannel: " << status.message << std::endl;
+  if (!connection->WriteToChannel(9, 15, "N:MYDISC" /*"N:MYDISC,ID"*/,
+                                  &status)) {
+    std::cout << "WriteToChannel: " << status.message << std::endl;
+    return 1;
+  }
+
+  // Get the result for the disc format.
+  if (!connection->ReadFromChannel(9, 15, &response, &status)) {
+    std::cout << "ReadFromChannel: " << status.message << std::endl;
+    return 1;
+  }
+  std::cout << "Formatting status: " << response << std::endl;
+
+  std::cout << "Formatting disc (full format)..." << std::endl;
+  if (!connection->WriteToChannel(9, 15, "N:MYDISC,ID", &status)) {
+    std::cout << "WriteToChannel: " << status.message << std::endl;
     return 1;
   }
 

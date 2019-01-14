@@ -61,6 +61,7 @@ cc_binary(
     ],
     deps = [
         ":iec_host_lib",
+        "@boost//:format",
         "@boost//:program_options",
     ],
 )

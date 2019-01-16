@@ -18,6 +18,20 @@ namespace po = boost::program_options;
 
 using namespace std::chrono_literals;
 
+// Convert input to a string of BCD hex numbers.
+static std::string BytesToHex(const std::string &input) {
+  std::string result;
+  for (auto &c : input) {
+    result += (boost::format("%02x") %
+               static_cast<unsigned int>(static_cast<unsigned char>(c)))
+                  .str();
+  }
+  return result;
+}
+
+// GetTrackSector translates from a sector index to corresponding
+// track and (track local) sector number according to a hardcoded
+// schema matching the 1541's sectors / track configuration.
 static void GetTrackSector(unsigned int s, unsigned int *track,
                            unsigned int *sector) {
   const unsigned int area1_sectors = 357;
@@ -53,6 +67,7 @@ int main(int argc, char *argv[]) {
 
   std::string arduino_device;
   int serial_speed = 0;
+  bool verify = false;
 
   po::options_description desc("Options");
   desc.add_options()("help", "usage overview")(
@@ -60,7 +75,8 @@ int main(int argc, char *argv[]) {
       po::value<std::string>(&arduino_device)->default_value("/dev/ttyUSB0"),
       "serial interface to use")(
       "speed", po::value<int>(&serial_speed)->default_value(57600),
-      "baud rate");
+      "baud rate")("verify", po::value<bool>(&verify)->default_value(false),
+                   "verify copy");
 
   po::variables_map vm;
   po::store(po::parse_command_line(argc, argv, desc), vm);
@@ -118,11 +134,37 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  unsigned int da_chan = 2;
+  std::cout << "Opened file." << std::endl;
+
+  unsigned int da_chan_write = 2;
   // Open a direct access channel.
-  if (!connection->OpenChannel(9, da_chan, "#", &status)) {
+  if (!connection->OpenChannel(9, da_chan_write, "#", &status)) {
     std::cout << "OpenChannel: " << status.message << std::endl;
   }
+
+  unsigned int da_chan_read = 3;
+  // Open a direct access channel.
+  if (!connection->OpenChannel(9, da_chan_read, "#", &status)) {
+    std::cout << "OpenChannel: " << status.message << std::endl;
+  }
+
+  std::cout << "Opened direct access channels." << std::endl;
+
+  auto cmd = boost::format("B-P:%u 0") % da_chan_write;
+  std::cout << "cmd=" << cmd << std::endl;
+  if (!connection->WriteToChannel(9, 15, cmd.str(), &status)) {
+    std::cout << "WriteToChannel: " << status.message << std::endl;
+    return 1;
+  }
+
+  cmd = boost::format("B-P:%u 0") % da_chan_read;
+  std::cout << "cmd=" << cmd << std::endl;
+  if (!connection->WriteToChannel(9, 15, cmd.str(), &status)) {
+    std::cout << "WriteToChannel: " << status.message << std::endl;
+    return 1;
+  }
+
+  std::cout << "Reset buffer offsets." << std::endl;
 
   BufferedReadWriter reader(fd);
 
@@ -135,7 +177,8 @@ int main(int argc, char *argv[]) {
     }
 
     // Write the current sector to the buffer.
-    if (!connection->WriteToChannel(9, da_chan, current_sector, &status)) {
+    if (!connection->WriteToChannel(9, da_chan_write, current_sector,
+                                    &status)) {
       std::cout << "WriteToChannel: " << status.message << std::endl;
       return 1;
     }
@@ -145,18 +188,48 @@ int main(int argc, char *argv[]) {
     GetTrackSector(s, &track, &sector);
 
     // Write the buffer to disc.
-    std::string cmd =
-        (boost::format("U2 %u 0 %u %u") % da_chan % track % sector).str();
+    auto cmd = boost::format("U2:%u 0 %u %u") % da_chan_write % track % sector;
     std::cout << "cmd=" << cmd << std::endl;
-    if (!connection->WriteToChannel(9, 15, cmd, &status)) {
+    if (!connection->WriteToChannel(9, 15, cmd.str(), &status)) {
       std::cout << "WriteToChannel: " << status.message << std::endl;
       return 1;
+    }
+
+    if (verify) {
+      // Verify buffer content.
+      cmd = boost::format("U1:%u 0 %u %u") % da_chan_read % track % sector;
+      std::cout << "cmd=" << cmd << std::endl;
+      if (!connection->WriteToChannel(9, 15, cmd.str(), &status)) {
+        std::cout << "WriteToChannel: " << status.message << std::endl;
+        return 1;
+      }
+      // Read the current sector from the buffer.
+      std::string verify_content;
+      if (!connection->ReadFromChannel(9, da_chan_read, &verify_content,
+                                       &status)) {
+        std::cout << "ReadFromChannel: " << status.message << std::endl;
+        return 1;
+      }
+
+      if (current_sector != verify_content) {
+        std::cout << "Verification failed:" << std::endl;
+        std::cout << "Original sector (" << current_sector.size()
+                  << " bytes):" << std::endl;
+        std::cout << BytesToHex(current_sector) << std::endl;
+        std::cout << "Read sector (" << verify_content.size()
+                  << " bytes):" << std::endl;
+        std::cout << BytesToHex(verify_content) << std::endl;
+      }
     }
   }
 
   close(fd);
 
-  if (!connection->CloseChannel(9, da_chan, &status)) {
+  if (!connection->CloseChannel(9, da_chan_write, &status)) {
+    std::cout << "CloseChannel: " << status.message << std::endl;
+    return 1;
+  }
+  if (!connection->CloseChannel(9, da_chan_read, &status)) {
     std::cout << "CloseChannel: " << status.message << std::endl;
     return 1;
   }

@@ -25,6 +25,9 @@ void SetError(IECStatus::IECStatusCode status_code, const std::string &context,
   case IECStatus::INVALID_ARGUMENT:
     status->message = "Invalid argument";
     break;
+  case IECStatus::IEC_CONNECTION_FAILURE:
+    status->message = "IEC connection failure";
+    break;
   }
   if (!context.empty()) {
     status->message = context + ": " + status->message;
@@ -103,7 +106,9 @@ bool BufferedReadWriter::ReadTerminatedString(char term_symbol,
       // We looked everywhere within max_length but couldn't find anything.
       // We're done here.
       SetError(IECStatus::CONNECTION_FAILURE,
-               (boost::format("couldn't find '%c'") % term_symbol).str(),
+               (boost::format("couldn't find 0x%02x") %
+                static_cast<int>(term_symbol))
+                   .str(),
                status);
       return false;
     }

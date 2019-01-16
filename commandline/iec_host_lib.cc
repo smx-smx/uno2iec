@@ -16,9 +16,11 @@
 
 using namespace std::chrono_literals;
 
-// Maximum chars to read looking for '\r'. This is intentionally larger than
-// kConnectionStringPrefix, because it is followed by a version number.
-static const size_t kMaxLength = 256;
+// Maximum chars to read looking for '\r'. We want to be able to
+// process at least one 1541 sector of data, and some characters
+// may be escaped, so we'll look for up to 512 (all escaped) characters
+// plus the terminator.
+static const size_t kMaxLength = 512 + 1;
 
 // Maximum size of one data packet sent to the Arduino.
 static const size_t kMaxSendPacketSize = 256;
@@ -53,6 +55,27 @@ static const std::string kCmdGetData =
     "g"; // Get data from a channel on a device.
 static const std::string kCmdPutData =
     "p"; // Put data onto a channel on a device.
+
+static std::string GetPrintableString(const std::string &str) {
+  std::string result;
+  for (const auto &c : str) {
+    switch (c) {
+    case '\r':
+      result += "\\r";
+      break;
+    case '\n':
+      result += "\\n";
+      break;
+    default:
+      if (c < 32) {
+        result += (boost::format("#%u") % c).str();
+      } else {
+        result += c;
+      }
+    }
+  }
+  return result;
+}
 
 IECBusConnection::IECBusConnection(int arduino_fd, LogCallback log_callback)
     : arduino_fd_(arduino_fd),
@@ -190,8 +213,8 @@ bool IECBusConnection::Initialize(IECStatus *status) {
       break;
     } else if (i >= (kNumRetries - 1)) {
       SetError(IECStatus::CONNECTION_FAILURE,
-               std::string("Unknown protocol response: '") + connection_string +
-                   "'",
+               std::string("Unknown protocol response: '") +
+                   GetPrintableString(connection_string) + "'",
                status);
       return false;
     } else {
@@ -295,10 +318,10 @@ void IECBusConnection::ProcessResponses() {
       if (read_string.size() < 3 ||
           debug_channel_map_.count(read_string[1]) == 0) {
         // Print the malformed message, but don't terminate execution.
-        log_callback_(
-            'E', "CLIENT",
-            (boost::format("Malformed debug message '%s'") % read_string)
-                .str());
+        log_callback_('E', "CLIENT",
+                      (boost::format("Malformed debug message '%s'") %
+                       GetPrintableString(read_string))
+                          .str());
         return;
       }
       log_callback_(read_string[0], debug_channel_map_[read_string[1]],
@@ -328,7 +351,7 @@ void IECBusConnection::ProcessResponses() {
       IECStatus iecStatus;
       if (!read_string.empty()) {
         // We can use the status string directly, it isn't escaped.
-        SetError(IECStatus::CONNECTION_FAILURE, read_string, &iecStatus);
+        SetError(IECStatus::IEC_CONNECTION_FAILURE, read_string, &iecStatus);
       }
       response_promise_.set_value(
           std::pair<std::string, IECStatus>(last_response, iecStatus));

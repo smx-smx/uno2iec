@@ -11,7 +11,7 @@
 // This constant is not the read buffer size, but the maximum amount of read
 // ahead that may be specified when calling ReadTerminatedString.
 // The buffer size is derived from this value to be 2 * kMaxReadAhead - 1.
-const int kMaxReadAhead = 512;
+const int kMaxReadAhead = 1024;
 
 struct IECStatus {
   IECStatus() : status_code(OK) {}
@@ -30,6 +30,7 @@ struct IECStatus {
     UNIMPLEMENTED = 0x01,
     CONNECTION_FAILURE = 0x02,
     INVALID_ARGUMENT = 0x03,
+    IEC_CONNECTION_FAILURE = 0x04,
   };
   IECStatusCode status_code;
   std::string message; // A status message describing the status.

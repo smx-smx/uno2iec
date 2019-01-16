@@ -343,8 +343,8 @@ byte Interface::hostModeHandler(void) {
 
 const char *Interface::handleOpenOrPutDataRequest(IEC::ATNCommand cmd) {
   const char *result = (PGM_P)F("");
-  char requestHeader[3];
-  if (COMPORT.readBytes(requestHeader, 3) != 3) {
+  byte requestHeader[3];
+  if (COMPORT.readBytes((char *)requestHeader, 3) != 3) {
     // Didn't receive the full sequence within our timeout. This is some kind of
     result =
         (PGM_P)F("Received incomplete open/put data command on serial line.");
@@ -390,11 +390,12 @@ const char *Interface::handleOpenOrPutDataRequest(IEC::ATNCommand cmd) {
 
   int i = 0;
   for (i = 0; i < dataSize && !hasIECError; ++i) {
+    byte toSend = serCmdIOBuf[i];
     if (i < dataSize - 1) {
-      hasIECError = !m_iec.send(serCmdIOBuf[i]);
+      hasIECError = !m_iec.send(toSend);
     } else {
       // Send the last character with an EOI.
-      hasIECError = !m_iec.sendEOI(serCmdIOBuf[i]);
+      hasIECError = !m_iec.sendEOI(toSend);
     }
   }
   interrupts();

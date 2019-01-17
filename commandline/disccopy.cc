@@ -68,6 +68,9 @@ int main(int argc, char *argv[]) {
   std::string arduino_device;
   int serial_speed = 0;
   bool verify = false;
+  std::string source;
+  int target = 9;
+  bool format = false;
 
   po::options_description desc("Options");
   desc.add_options()("help", "usage overview")(
@@ -76,7 +79,12 @@ int main(int argc, char *argv[]) {
       "serial interface to use")(
       "speed", po::value<int>(&serial_speed)->default_value(57600),
       "baud rate")("verify", po::value<bool>(&verify)->default_value(false),
-                   "verify copy");
+                   "verify copy")(
+      "source", po::value<std::string>(&source)->default_value(""),
+      "disk image to copy from")(
+      "target", po::value<int>(&target)->default_value(9), "device to copy to")(
+      "format", po::value<bool>(&format)->default_value(false),
+      "format disc prior to copying");
 
   po::variables_map vm;
   po::store(po::parse_command_line(argc, argv, desc), vm);
@@ -111,24 +119,24 @@ int main(int argc, char *argv[]) {
     return 1;
   }
   std::cout << "Initial drive status: " << response << std::endl;
-  std::cout << "Formatting disc..." << std::endl;
+  if (format) {
+    std::cout << "Formatting disc..." << std::endl;
 
-  if (!connection->WriteToChannel(9, 15, "N:MYDISC" /*"N:MYDISC,ID"*/,
-                                  &status)) {
-    std::cout << "WriteToChannel: " << status.message << std::endl;
-    return 1;
+    if (!connection->WriteToChannel(9, 15, "N:MYDISC,ID", &status)) {
+      std::cout << "WriteToChannel: " << status.message << std::endl;
+      return 1;
+    }
+
+    // Get the result for the disc format.
+    if (!connection->ReadFromChannel(9, 15, &response, &status)) {
+      std::cout << "ReadFromChannel: " << status.message << std::endl;
+      return 1;
+    }
+    std::cout << "Formatting status: " << response << std::endl;
   }
 
-  // Get the result for the disc format.
-  if (!connection->ReadFromChannel(9, 15, &response, &status)) {
-    std::cout << "ReadFromChannel: " << status.message << std::endl;
-    return 1;
-  }
-  std::cout << "Formatting status: " << response << std::endl;
-
-  std::cout << "Opening source..." << std::endl;
-  int fd = open("/home/weirdsoul/coding/uno2iec/commandline/2ndReality_S1.D64",
-                O_RDONLY);
+  std::cout << "Opening source '" << source << "'." << std::endl;
+  int fd = open(source.c_str(), O_RDONLY);
   if (fd == -1) {
     std::cout << "Error opening file: " << strerror(errno) << std::endl;
     return 1;
@@ -138,13 +146,13 @@ int main(int argc, char *argv[]) {
 
   unsigned int da_chan_write = 2;
   // Open a direct access channel.
-  if (!connection->OpenChannel(9, da_chan_write, "#", &status)) {
+  if (!connection->OpenChannel(target, da_chan_write, "#", &status)) {
     std::cout << "OpenChannel: " << status.message << std::endl;
   }
 
   unsigned int da_chan_read = 3;
   // Open a direct access channel.
-  if (!connection->OpenChannel(9, da_chan_read, "#", &status)) {
+  if (!connection->OpenChannel(target, da_chan_read, "#", &status)) {
     std::cout << "OpenChannel: " << status.message << std::endl;
   }
 
@@ -152,14 +160,14 @@ int main(int argc, char *argv[]) {
 
   auto cmd = boost::format("B-P:%u 0") % da_chan_write;
   std::cout << "cmd=" << cmd << std::endl;
-  if (!connection->WriteToChannel(9, 15, cmd.str(), &status)) {
+  if (!connection->WriteToChannel(target, 15, cmd.str(), &status)) {
     std::cout << "WriteToChannel: " << status.message << std::endl;
     return 1;
   }
 
   cmd = boost::format("B-P:%u 0") % da_chan_read;
   std::cout << "cmd=" << cmd << std::endl;
-  if (!connection->WriteToChannel(9, 15, cmd.str(), &status)) {
+  if (!connection->WriteToChannel(target, 15, cmd.str(), &status)) {
     std::cout << "WriteToChannel: " << status.message << std::endl;
     return 1;
   }
@@ -177,7 +185,7 @@ int main(int argc, char *argv[]) {
     }
 
     // Write the current sector to the buffer.
-    if (!connection->WriteToChannel(9, da_chan_write, current_sector,
+    if (!connection->WriteToChannel(target, da_chan_write, current_sector,
                                     &status)) {
       std::cout << "WriteToChannel: " << status.message << std::endl;
       return 1;
@@ -190,7 +198,7 @@ int main(int argc, char *argv[]) {
     // Write the buffer to disc.
     auto cmd = boost::format("U2:%u 0 %u %u") % da_chan_write % track % sector;
     std::cout << "cmd=" << cmd << std::endl;
-    if (!connection->WriteToChannel(9, 15, cmd.str(), &status)) {
+    if (!connection->WriteToChannel(target, 15, cmd.str(), &status)) {
       std::cout << "WriteToChannel: " << status.message << std::endl;
       return 1;
     }
@@ -199,13 +207,13 @@ int main(int argc, char *argv[]) {
       // Verify buffer content.
       cmd = boost::format("U1:%u 0 %u %u") % da_chan_read % track % sector;
       std::cout << "cmd=" << cmd << std::endl;
-      if (!connection->WriteToChannel(9, 15, cmd.str(), &status)) {
+      if (!connection->WriteToChannel(target, 15, cmd.str(), &status)) {
         std::cout << "WriteToChannel: " << status.message << std::endl;
         return 1;
       }
       // Read the current sector from the buffer.
       std::string verify_content;
-      if (!connection->ReadFromChannel(9, da_chan_read, &verify_content,
+      if (!connection->ReadFromChannel(target, da_chan_read, &verify_content,
                                        &status)) {
         std::cout << "ReadFromChannel: " << status.message << std::endl;
         return 1;
@@ -225,17 +233,17 @@ int main(int argc, char *argv[]) {
 
   close(fd);
 
-  if (!connection->CloseChannel(9, da_chan_write, &status)) {
+  if (!connection->CloseChannel(target, da_chan_write, &status)) {
     std::cout << "CloseChannel: " << status.message << std::endl;
     return 1;
   }
-  if (!connection->CloseChannel(9, da_chan_read, &status)) {
+  if (!connection->CloseChannel(target, da_chan_read, &status)) {
     std::cout << "CloseChannel: " << status.message << std::endl;
     return 1;
   }
 
   // Get the final result.
-  if (!connection->ReadFromChannel(9, 15, &response, &status)) {
+  if (!connection->ReadFromChannel(target, 15, &response, &status)) {
     std::cout << "ReadFromChannel: " << status.message << std::endl;
     return 1;
   }

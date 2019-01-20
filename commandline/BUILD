@@ -58,6 +58,7 @@ cc_binary(
     linkopts = [ "-lpthread" ],
     srcs = [
         "disccopy.cc",
+        "//assembly:format_h",
     ],
     deps = [
         ":iec_host_lib",

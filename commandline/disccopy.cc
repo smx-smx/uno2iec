@@ -6,6 +6,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
+#include "assembly/format_h.h"
 #include "boost/format.hpp"
 #include "boost/program_options/cmdline.hpp"
 #include "boost/program_options/options_description.hpp"

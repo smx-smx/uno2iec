@@ -201,6 +201,12 @@ bool IECBusConnection::CloseChannel(char device_number, char channel,
 }
 
 bool IECBusConnection::Initialize(IECStatus *status) {
+  // Write a completely unmotivated '\r' to the serial bus.
+  // This helps work around an issue with some USB to serial chips that
+  // won't use the correct settings until the first character is sent.
+  if (!arduino_writer_->WriteString("\r", status)) {
+    return false;
+  }
   std::string connection_string;
   for (int i = 0; i < kNumRetries; ++i) {
     if (!arduino_writer_->ReadTerminatedString('\r', kMaxLength,

@@ -1,5 +1,5 @@
 	!cpu 6502 ; We want to run on a 1541 disc station.
-	*= $0300  ; We'll run in buffer 0 of the 1541.
+	*= $0500  ; We'll run in buffer 2 of the 1541.
 
 	print_error = $e60a  ; ROM routine to print error (a=errno,x=drive)
 

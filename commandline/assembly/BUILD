@@ -6,7 +6,9 @@ package(default_visibility = ["//visibility:public"])
 acme_binary(
     name = "format",
     format = "plain",
-    srcs = ["format.a"],
+    srcs = [
+        "format.asm"
+    ],
 )
 
 cc_binary(

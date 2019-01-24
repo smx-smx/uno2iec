@@ -19,6 +19,9 @@ namespace po = boost::program_options;
 
 using namespace std::chrono_literals;
 
+// Max amount of data for a single M-W command is 35 bytes.
+static const size_t kMaxMWSize = 35;
+
 // Convert input to a string of BCD hex numbers.
 static std::string BytesToHex(const std::string &input) {
   std::string result;
@@ -59,6 +62,38 @@ static void GetTrackSector(unsigned int s, unsigned int *track,
   *sector = s;
   *track = (*sector / 21) + 1;
   *sector = *sector % 21;
+}
+
+static bool WriteMemory(IECBusConnection* connection, int target,
+			unsigned short int target_address,
+			size_t num_bytes,
+			const unsigned char* source, IECStatus* status) {
+  size_t bytes_written = 0;
+  while (num_bytes - bytes_written > 0) {
+    std::string request = "M-W";
+    unsigned short int mem_pos = target_address + bytes_written;
+    request.append(1, mem_pos & 0xff);
+    request.append(1, mem_pos >> 8);
+    size_t num_data_bytes = std::min(kMaxMWSize, num_bytes - bytes_written);
+    request.append(1, num_data_bytes);
+    for (size_t i = 0; i < num_data_bytes; ++i) {
+      request.append(1, format_bin[bytes_written + i]);
+    }
+    std::cout << "Sending M-W and " << num_data_bytes
+	      << " data bytes." << std::endl;
+    if (!connection->WriteToChannel(target, 15, request, status)) {
+      std::cout << "WriteToChannel: " << status->message << std::endl;
+      return false;
+    }
+    std::string response;
+    if (!connection->ReadFromChannel(target, 15, &response, status)) {
+      std::cout << "ReadFromChannel: " << status->message << std::endl;
+      return false;
+    }
+    std::cout << "resulting status: " << response << std::endl;
+    bytes_written += num_data_bytes;
+  }
+  return true;
 }
 
 int main(int argc, char *argv[]) {
@@ -120,16 +155,39 @@ int main(int argc, char *argv[]) {
     return 1;
   }
   std::cout << "Initial drive status: " << response << std::endl;
+
+  std::cout << "Formatting disc..." << std::endl;
+
+  if (!WriteMemory(connection.get(), target, 0x400, sizeof(format_bin),
+		   format_bin, &status)) {
+    std::cout << "WriteMemory: " << status.message << std::endl;
+  }
+  
+  std::string request = "M-E";
+  request.append(1, 0x00);
+  request.append(1, 0x04);  
+  std::cout << "Sending M-E" << std::endl;
+  if (!connection->WriteToChannel(target, 15, request, &status)) {
+    std::cout << "WriteToChannel: " << status.message << std::endl;
+    return 1;
+  }  
+  if (!connection->ReadFromChannel(target, 15, &response, &status)) {
+    std::cout << "ReadFromChannel: " << status.message << std::endl;
+    return 1;
+  }
+  std::cout << "resulting status: " << response << std::endl;
+ 
+#if 0
   if (format) {
     std::cout << "Formatting disc..." << std::endl;
 
-    if (!connection->WriteToChannel(9, 15, "N:MYDISC,ID", &status)) {
+    if (!connection->WriteToChannel(target, 15, "N:MYDISC,ID", &status)) {
       std::cout << "WriteToChannel: " << status.message << std::endl;
       return 1;
     }
 
     // Get the result for the disc format.
-    if (!connection->ReadFromChannel(9, 15, &response, &status)) {
+    if (!connection->ReadFromChannel(target, 15, &response, &status)) {
       std::cout << "ReadFromChannel: " << status.message << std::endl;
       return 1;
     }
@@ -249,6 +307,6 @@ int main(int argc, char *argv[]) {
     return 1;
   }
   std::cout << "Copying status: " << response << std::endl;
-
+#endif
   return 0;
 }

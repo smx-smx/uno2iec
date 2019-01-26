@@ -5,16 +5,13 @@
 	set_track_and_sector = $d6d3 ; Set track and sector number.
 	close_all_channels = $d307   ; Close all open channels.
 
-	format_init_head = $facb     		; Move head to track 1 (jmp).
 	format_delete_track = $fda3  		; Fill the track with SYNC (0xff).
 	format_write_empty_track = $fe0e	; Fill the track with gcr_empty_byte (0x55)
-	format_wait_sync_cnt = $fdc3 ; Wait for ($0621/$0622) number of syncs.
-	format_print_error = $fdd3   ; Produce formatting error (jmp).
 	format_convert_header_to_gcr = $fe30 	; Convert the sector header pointed to by
 						; current_buffer_start to GCR and store in ($01bb-$01ff).
 	format_move_block_buffer_0 = $fde5  		; Move $45 bytes of data in buffer zero by $45 bytes
 	format_move_gcr_to_current_buffer = $fdf5	; Move GCR data from auxiliary buffer to current
-				; buffer as referenced by current_buffer_start.
+							; buffer as referenced by current_buffer_start.
 	format_calculate_checksum = $f5e9       ; Build checksum over content in current buffer.
 	format_convert_content_to_gcr = $f78f	; Convert content in current buffer to GCR (in place
 						; plus auxiliary space in $01bb-$01ff). 
@@ -52,7 +49,8 @@
 	disc_id_0 = $12     ; Storage for disc ID.
 	disc_id_1 = $13
 
-	dc_command_register = $20 ; DC command register for drive 0.
+	dc_command_register = $20 	; DC command register for drive 0.
+	dc_current_track_number = $22 	; DC current track number.
 
 	current_buffer_start_low = $30 	; Typically overwritten, so can't be set to read from
 					; an offset within the buffer. 
@@ -68,6 +66,8 @@
 
 	current_track_sector_count = $43 ; Number of sectors on current track.
 
+	number_half_tracks_to_seek = $4a ; Number of halftracks to move during seek.
+
 	buffer_gcr_status = $50	   ; 0x00: Data in normal form, GCR-encoded otherwise.
 	
 	format_current_track = $51 ; During formatting, holds current track number.
@@ -81,18 +81,7 @@
 
 	format_sector_header_buffer = $0300  ; Contains sector header data.
 
-	format_sector_content_buffer = $0500 ; Contains sector content (converted to GCR in-place).
-
-	half_format_area_size_low = $0621   ; Half the estimated number of sync bytes for this track 
-	half_format_area_size_high = $0622
-
-	format_num_bytes_per_track_low = $0625 	; Capacity of a track in bytes.
-	format_num_bytes_per_track_high = $0624 ; TODO(aeckleder): Notice the swapped endianness.
-						; It's art, essentially. Fix once we no longer
-						; need parts of the original firmware.
-
-	format_num_bytes_per_gap = $0626	; Number of bytes in each gap between sectors.
-	format_sector_counter = $0628		; Counts sectors while building the data buffer.
+	format_sector_content_buffer = $0400 ; Contains sector content (converted to GCR in-place).
 
 	via1_timer_trigger_clear_by_read = $1804 ; Reading from here clears timer interrupt
 	via1_timer_trigger_by_write = $1805 ; Writing here (re)starts timer.
@@ -117,3 +106,10 @@
 	; GCR coding.
 	gcr_empty_byte = $55
 	gcr_sync_byte = $ff
+
+	; DC command register bits.
+	dc_cr_seeking = $40
+	dc_cr_idle = $20
+
+
+	

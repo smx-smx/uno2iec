@@ -1,8 +1,12 @@
 	!cpu 6502 ; We want to run on a 1541 disc station.
-	*= $0630  ; We'll run in buffer 3 and 4 of the 1541. Buffer 3 is partially used
-		  ; for temporary storage, so we skip the first 48 bytes.
-
+	*= $0500
+	
 	!source "assembly/definitions.asm" ; Include standard definitions.
+
+	; Entry point at the beginning of buffer 2.
+	jmp format_job		
+
+	; This is where command execution starts...
 	
 	jsr led_on
 	
@@ -15,24 +19,15 @@
 
 	lda #$01
 	sta current_track_number
-	
-	lda #$4C  ; Place a JMP instruction at the beginning of buffer 3.
-        sta $0600
-	lda #<format_job
-        sta $0601
-	lda #>format_job
-	sta $0602
-	
-	lda #$03  ; Set track and sector number for buffer 3.
+		
+	lda #$02  ; Set track and sector number for buffer 2.
 	jsr set_track_and_sector
 	
-	lda $7f   ; Current drive number (always 0)
-	ora #jc_execute_buffer
-
-	sta jm_buffer_3 ; Ask DC to execute buffer. This will trigger the requested action.
+	lda #jc_execute_buffer
+	sta jm_buffer_2 ; Ask DC to execute buffer. This will trigger the requested action.
 	
 wait_format_complete:
-	lda jm_buffer_3
+	lda jm_buffer_2
 	bmi wait_format_complete
 	
 	cmp #jr_error
@@ -48,11 +43,33 @@ format_ok:
 	; The format job is called in the context of the the DC interrupt.
 	; When done, it jumps back into the main job loop.
 	
-format_job:
+format_job:	
 	lda format_current_track
 	bpl in_progress		; If valid, we're already formatting
 
-	jmp format_init_head    ; Position head at track 1
+	lda #(dc_cr_seeking + dc_cr_idle)
+	sta dc_command_register
+	
+	lda #$01
+	sta dc_current_track_number
+	sta format_current_track
+
+	lda #$a4		; Move 46 tracks outwards to produce BUMP.
+	sta number_half_tracks_to_seek
+
+	lda via2_drive_port
+	and #$fc
+	sta via2_drive_port	; Step 00 for head movement.
+
+	lda #$0a
+	sta max_format_errors
+
+	lda #$a0
+	sta half_format_area_size_low
+	lda #$0f
+	sta half_format_area_size_high
+
+	jmp dc_end_of_job_loop
 
 in_progress:
 	ldy #$00			  ; Zero offset, needed for indirect
@@ -73,12 +90,10 @@ no_track_change:
 
 measure_track_length:
 	jsr format_delete_track
-	jsr format_wait_sync_cnt ; Wait for number of sync bytes
-				 ; specified in half_format_area_size
-
+	jsr wait_sync_cnt
 	lda #gcr_empty_byte
 	sta via2_drive_data
-	jsr format_wait_sync_cnt
+	jsr wait_sync_cnt
 	
 	; As we update our estimates, we should converge on having half
 	; the track filled with sync markers,
@@ -199,7 +214,7 @@ has_difference_in_high_byte:
 	
 	jmp measure_track_length
 
-difference_acceptable:
+difference_acceptable:	
 	; half_format_area_size now contains half the number of sync bytes for this track.
 	ldx #$00
 	ldy #$00
@@ -299,7 +314,7 @@ bytes_per_gap_division_done:
 	lda #errno_readerror_23
 	jmp format_print_error
 
-num_bytes_per_gap_ok:
+num_bytes_per_gap_ok:	
 	lda #$00
 	sta format_sector_counter
 	tay
@@ -343,7 +358,7 @@ prepare_sector_header_loop:
 	cmp current_track_sector_count
 	bcc prepare_sector_header_loop
 
-	tya
+	tya	
 	pha		; Remember buffer fillstate
 	
 	lda #>format_sector_header_buffer
@@ -370,7 +385,7 @@ prepare_sector_header_loop:
 	sta current_buffer_track_ptr    ; Store offset into sector header.
 
 	jsr format_write_empty_track
-
+	
 write_sectors_loop:
 	lda #gcr_sync_byte
 	sta via2_drive_data
@@ -460,15 +475,55 @@ write_last_track_byte_loop:	; Not exactly sure what this is for, but I assume
 	; Do we need it as well?
 
 	inc format_current_track
-	cmp #$24		; Do we have all 35 tracks yet?
-	bcs done_formatting
+	lda format_current_track
+	cmp #$29		; Do we have all 40 tracks yet?
+	bcs done_formatting	; TODO(aeckleder): Should we have an option to do 40 vs. 35?
 
 	jmp dc_end_of_job_loop
 
 done_formatting:	
-	lda #$ff
-	sta format_current_track
-	lda #$00
-	sta buffer_gcr_status
 	lda #$01
-	jmp dc_end_job_loop_with_status ; Report success.
+exit_with_error:
+	ldy #$ff
+	sty format_current_track
+	iny
+	sty buffer_gcr_status
+	jmp dc_end_job_loop_with_status
+
+	; Decrease max error count and bail out if too many errors occurred.
+format_print_error:
+	dec max_format_errors
+	beq exit_with_error
+
+	jmp dc_end_of_job_loop
+
+	; Wait for half_format_area_size sync signals.
+wait_sync_cnt:
+	ldx half_format_area_size_low
+	ldy half_format_area_size_high
+wfs_cnt_loop:
+	bvc wfs_cnt_loop
+	clv
+	dex
+	bne wfs_cnt_loop
+	dey
+	bpl wfs_cnt_loop
+	rts
+
+	; Auxiliary variables.
+
+max_format_errors:
+	!8 0			; Max number of errors during formatting.
+half_format_area_size_low:
+	!8 0			; Half the estimated number of sync bytes for this track.
+half_format_area_size_high:
+	!8 0
+format_num_bytes_per_track_low:
+	!8 0			; Capacity of a track in bytes.
+format_num_bytes_per_track_high:
+	!8 0
+format_num_bytes_per_gap:
+	!8 0			; Number of bytes in each gap between sectors.
+format_sector_counter:
+	!8 0			; Counts sectors while building the data buffer.
+

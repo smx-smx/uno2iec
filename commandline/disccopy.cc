@@ -23,7 +23,9 @@ using namespace std::chrono_literals;
 static const size_t kMaxMWSize = 35;
 
 // Memory start location in the 1541's memory for our format routine.
-static const size_t kFormatCodeStart = 0x0630;
+static const size_t kFormatCodeStart = 0x0500;
+// We skip the first three bytes, because they're a jmp into the format job.
+static const size_t kFormatEntryPoint = 0x503;
 
 // Convert input to a string of BCD hex numbers.
 static std::string BytesToHex(const std::string &input) {
@@ -169,8 +171,8 @@ int main(int argc, char *argv[]) {
   }
   
   std::string request = "M-E";
-  request.append(1, char(kFormatCodeStart & 0xff));
-  request.append(1, char(kFormatCodeStart >> 8));
+  request.append(1, char(kFormatEntryPoint & 0xff));
+  request.append(1, char(kFormatEntryPoint >> 8));
   std::cout << "Sending M-E" << std::endl;
   if (!connection->WriteToChannel(target, 15, request, &status)) {
     std::cout << "WriteToChannel: " << status.message << std::endl;

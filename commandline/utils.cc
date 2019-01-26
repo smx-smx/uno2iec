@@ -30,7 +30,7 @@ void SetError(IECStatus::IECStatusCode status_code, const std::string &context,
     break;
   case IECStatus::DRIVE_ERROR:
     status->message = "Drive error";
-    break;    
+    break;
   }
   if (!context.empty()) {
     status->message = context + ": " + status->message;

@@ -69,12 +69,11 @@ static void GetTrackSector(unsigned int s, unsigned int *track,
   *sector = *sector % 21;
 }
 
-static bool WriteMemory(IECBusConnection* connection, int target,
-			unsigned short int target_address,
-			size_t num_bytes,
-			const unsigned char* source, IECStatus* status) {
+static bool WriteMemory(IECBusConnection *connection, int target,
+                        unsigned short int target_address, size_t num_bytes,
+                        const unsigned char *source, IECStatus *status) {
   std::cout << "WriteMemory, num_bytes = " << num_bytes << std::endl;
-  
+
   size_t bytes_written = 0;
   while (num_bytes - bytes_written > 0) {
     std::string request = "M-W";
@@ -98,7 +97,7 @@ static bool WriteMemory(IECBusConnection* connection, int target,
     if (response != "00, OK,00,00\r") {
       SetError(IECStatus::DRIVE_ERROR, response, status);
       return false;
-    }      
+    }
     bytes_written += num_data_bytes;
   }
   return true;
@@ -163,16 +162,16 @@ int main(int argc, char *argv[]) {
     return 1;
   }
   std::cout << "Initial drive status: " << response << std::endl;
- 
+
   if (format) {
     std::cout << "Formatting disc..." << std::endl;
 
     if (!WriteMemory(connection.get(), target, kFormatCodeStart,
-		     sizeof(format_bin), format_bin, &status)) {
+                     sizeof(format_bin), format_bin, &status)) {
       std::cout << "WriteMemory: " << status.message << std::endl;
       return 1;
     }
-  
+
     std::string request = "M-E";
     request.append(1, char(kFormatEntryPoint & 0xff));
     request.append(1, char(kFormatEntryPoint >> 8));
@@ -180,7 +179,7 @@ int main(int argc, char *argv[]) {
     if (!connection->WriteToChannel(target, 15, request, &status)) {
       std::cout << "WriteToChannel: " << status.message << std::endl;
       return 1;
-    }  
+    }
 
     // Get the result for the disc format.
     if (!connection->ReadFromChannel(target, 15, &response, &status)) {

@@ -28,6 +28,9 @@ void SetError(IECStatus::IECStatusCode status_code, const std::string &context,
   case IECStatus::IEC_CONNECTION_FAILURE:
     status->message = "IEC connection failure";
     break;
+  case IECStatus::DRIVE_ERROR:
+    status->message = "Drive error";
+    break;    
   }
   if (!context.empty()) {
     status->message = context + ": " + status->message;

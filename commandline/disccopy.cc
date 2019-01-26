@@ -86,8 +86,6 @@ static bool WriteMemory(IECBusConnection* connection, int target,
     for (size_t i = 0; i < num_data_bytes; ++i) {
       request.append(1, format_bin[bytes_written + i]);
     }
-    std::cout << "Sending M-W and " << num_data_bytes
-	      << " data bytes." << std::endl;
     if (!connection->WriteToChannel(target, 15, request, status)) {
       std::cout << "WriteToChannel: " << status->message << std::endl;
       return false;
@@ -97,7 +95,10 @@ static bool WriteMemory(IECBusConnection* connection, int target,
       std::cout << "ReadFromChannel: " << status->message << std::endl;
       return false;
     }
-    std::cout << "resulting status: " << response << std::endl;
+    if (response != "00, OK,00,00\r") {
+      SetError(IECStatus::DRIVE_ERROR, response, status);
+      return false;
+    }      
     bytes_written += num_data_bytes;
   }
   return true;
@@ -157,41 +158,29 @@ int main(int argc, char *argv[]) {
 
   // Accessing the command channel is always ok, no open call necessary.
   std::string response;
-  if (!connection->ReadFromChannel(9, 15, &response, &status)) {
-    std::cout << "ReadFromChannel: " << status.message << std::endl;
-    return 1;
-  }
-  std::cout << "Initial drive status: " << response << std::endl;
-
-  std::cout << "Formatting disc..." << std::endl;
-
-  if (!WriteMemory(connection.get(), target, kFormatCodeStart,
-		   sizeof(format_bin), format_bin, &status)) {
-    std::cout << "WriteMemory: " << status.message << std::endl;
-  }
-  
-  std::string request = "M-E";
-  request.append(1, char(kFormatEntryPoint & 0xff));
-  request.append(1, char(kFormatEntryPoint >> 8));
-  std::cout << "Sending M-E" << std::endl;
-  if (!connection->WriteToChannel(target, 15, request, &status)) {
-    std::cout << "WriteToChannel: " << status.message << std::endl;
-    return 1;
-  }  
   if (!connection->ReadFromChannel(target, 15, &response, &status)) {
     std::cout << "ReadFromChannel: " << status.message << std::endl;
     return 1;
   }
-  std::cout << "resulting status: " << response << std::endl;
+  std::cout << "Initial drive status: " << response << std::endl;
  
-#if 0
   if (format) {
     std::cout << "Formatting disc..." << std::endl;
 
-    if (!connection->WriteToChannel(target, 15, "N:MYDISC,ID", &status)) {
-      std::cout << "WriteToChannel: " << status.message << std::endl;
+    if (!WriteMemory(connection.get(), target, kFormatCodeStart,
+		     sizeof(format_bin), format_bin, &status)) {
+      std::cout << "WriteMemory: " << status.message << std::endl;
       return 1;
     }
+  
+    std::string request = "M-E";
+    request.append(1, char(kFormatEntryPoint & 0xff));
+    request.append(1, char(kFormatEntryPoint >> 8));
+    std::cout << "Sending M-E" << std::endl;
+    if (!connection->WriteToChannel(target, 15, request, &status)) {
+      std::cout << "WriteToChannel: " << status.message << std::endl;
+      return 1;
+    }  
 
     // Get the result for the disc format.
     if (!connection->ReadFromChannel(target, 15, &response, &status)) {
@@ -314,6 +303,5 @@ int main(int argc, char *argv[]) {
     return 1;
   }
   std::cout << "Copying status: " << response << std::endl;
-#endif
   return 0;
 }

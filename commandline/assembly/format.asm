@@ -291,8 +291,184 @@ bytes_per_gap_division_no_overflow:
 	inx
 	bne bytes_per_gap_division_loop
 bytes_per_gap_division_done:
+	; x = number of bytes per gap, a = remainder
 	stx format_num_bytes_per_gap
-	jmp $fc27
 
+	cpx #$04
+	bcs num_bytes_per_gap_ok
+	lda #errno_readerror_23
+	jmp format_print_error
+
+num_bytes_per_gap_ok:
+	lda #$00
+	sta format_sector_counter
+	tay
+	tax			; x = y = format_sector_counter = 0 
+
+prepare_sector_header_loop:
+	lda sector_header_signature_byte
+	sta format_sector_header_buffer, y
+	iny
+	iny			; Skip checksum byte. to be written later.
+	lda format_sector_counter
+	sta format_sector_header_buffer, y
+	iny
+	lda format_current_track
+	sta format_sector_header_buffer, y
+	iny
+	lda disc_id_1
+	sta format_sector_header_buffer, y
+	iny
+	lda disc_id_0
+	sta format_sector_header_buffer, y
+	iny
+	lda #$0f
+	sta format_sector_header_buffer, y
+	iny
+	sta format_sector_header_buffer, y
+	iny
 	
+	; Calculate checksum from header content and store it in the
+	; corresponding field
+	offset_from_header_start = 8 ; y = offset_from_header_start + header_start
+	lda #$00
+	eor format_sector_header_buffer - offset_from_header_start + 2, y
+	eor format_sector_header_buffer - offset_from_header_start + 3, y
+	eor format_sector_header_buffer - offset_from_header_start + 4, y
+	eor format_sector_header_buffer - offset_from_header_start + 5, y	
+	sta format_sector_header_buffer - offset_from_header_start + 1, y
 	
+	inc format_sector_counter
+	lda format_sector_counter
+	cmp current_track_sector_count
+	bcc prepare_sector_header_loop
+
+	tya
+	pha		; Remember buffer fillstate
+	
+	lda #>format_sector_header_buffer
+	sta current_buffer_start_high
+	jsr format_convert_header_to_gcr
+
+	pla		; Pull buffer fillstate from the stack.
+	tay
+	dey		; Point to last element of the buffer.
+	jsr format_move_block_buffer_0  ; TODO(aeckleder): This routine hardcodes the
+					; buffer number, so we may want to throw it out.
+					; Also: Make sure we actually need the unencoded data! 
+	jsr format_move_gcr_to_current_buffer
+
+	lda #>format_sector_content_buffer
+	sta current_buffer_start_high
+
+	jsr format_calculate_checksum	
+	sta sector_data_checksum
+
+	jsr format_convert_content_to_gcr
+
+	lda #$00
+	sta current_buffer_track_ptr    ; Store offset into sector header.
+
+	jsr format_write_empty_track
+
+write_sectors_loop:
+	lda #gcr_sync_byte
+	sta via2_drive_data
+	ldx #$05
+write_pre_header_sync_loop:	
+	bvc write_pre_header_sync_loop
+	clv
+	dex
+	bne write_pre_header_sync_loop 	; Write 5 x SYNC.
+
+	ldx #$0a
+	ldy current_buffer_track_ptr    ; Offset into sector header.
+write_header_loop:	
+	bvc write_header_loop
+	clv
+	lda format_sector_header_buffer, y
+	sta via2_drive_data
+	iny
+	dex
+	bne write_header_loop		; Write 10 bytes in total.
+	
+	lda #gcr_empty_byte		; Write 9 empty bytes.
+	ldx #$09
+write_pre_content_empty_bytes_loop:	
+	bvc write_pre_content_empty_bytes_loop
+	clv
+	sta via2_drive_data
+	dex
+	bne write_pre_content_empty_bytes_loop 
+
+	lda #gcr_sync_byte
+	ldx #$05
+write_pre_content_sync_loop:
+	bvc write_pre_content_sync_loop
+	clv
+	sta via2_drive_data
+	dex
+	bne write_pre_content_sync_loop
+
+	ldx #$bb  ; After GCR encoding, not all data fits into our content buffer.
+	          ; The GCR encoder therefore wrote a bunch of data into an auxiliary buffer.
+write_aux_buffer_sector_content_loop:
+	bvc write_aux_buffer_sector_content_loop
+	clv
+	lda processor_stack_page, x	; access auxiliary buffer from $1bb to $1ff.
+	sta via2_drive_data
+	inx
+	bne write_aux_buffer_sector_content_loop
+
+	ldy #$00  ; Now write the rest of the sector content.
+write_sector_content_loop:	
+	bvc write_sector_content_loop
+	clv
+	lda (current_buffer_start_low), y
+	sta via2_drive_data
+	iny
+	bne write_sector_content_loop
+	
+	lda #gcr_empty_byte
+	ldx format_num_bytes_per_gap
+write_post_sector_gap_loop:
+	bvc write_post_sector_gap_loop
+	clv
+	sta via2_drive_data
+	dex
+	bne write_post_sector_gap_loop
+	
+	lda current_buffer_track_ptr ; Move to header of next sector.
+	clc
+	adc #$0a
+	sta current_buffer_track_ptr
+
+	dec format_sector_counter
+	bne write_sectors_loop
+
+flush_last_gap_byte_loop:
+	bvc flush_last_gap_byte_loop
+	clv
+write_last_track_byte_loop:	; Not exactly sure what this is for, but I assume
+				; that this is making the assumption that the number of
+				; total gap bytes will never be exactly a multiple of the
+				; number of bytes per gap, so it writes an extra one.
+	bvc write_last_track_byte_loop
+	clv
+
+	; TODO(aeckleder): The original formatting code has some verification here.
+	; Do we need it as well?
+
+	inc format_current_track
+	cmp #$24		; Do we have all 35 tracks yet?
+	bcs done_formatting
+
+	jmp dc_end_of_job_loop
+
+done_formatting:	
+	lda #$ff
+	sta format_current_track
+	lda #$00
+	sta buffer_gcr_status
+	lda #$01
+	jmp dc_end_job_loop_with_status ; Report success.

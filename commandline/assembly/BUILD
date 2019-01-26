@@ -9,6 +9,9 @@ acme_binary(
     srcs = [
         "format.asm"
     ],
+    includes = [
+    	"definitions.asm",
+    ],
 )
 
 cc_binary(

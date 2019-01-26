@@ -1,78 +1,8 @@
 	!cpu 6502 ; We want to run on a 1541 disc station.
-	*= $0400  ; We'll run in buffer 1 of the 1541, which is left untouched while formatting.
+	*= $0630  ; We'll run in buffer 3 and 4 of the 1541. Buffer 3 is partially used
+		  ; for temporary storage, so we skip the first 48 bytes.
 
-	; ROM routines
-	
-	print_error = $e60a          ; Print error (a=errno,x=drive).
-	led_on = $c100               ; Switch LED on.
-	set_track_and_sector = $d6d3 ; Set track and sector number.
-	close_all_channels = $d307   ; Close all open channels.
-
-	format_init_head = $facb     ; Move head to track 1 (jmp).
-	format_delete_track = $fda3  ; Fill the track with SYNC (0xff).
-	format_wait_sync_cnt = $fdc3 ; Wait for ($0621/$0622) number of syncs.
-	format_print_error = $fdd3   ; Produce formatting error (jmp).
-
-	dc_set_head_to_read = $fe00  ; Switch drive head to reading.
-	dc_wait_for_sync = $f556     ; Wait for sync signal.
-	dc_end_of_job_loop = $f99c   ; End of job loop, process head moves (jmp).
-
-	; DC Job codes.
-
-	jc_execute_buffer = $e0 ; Job code to execute code in buffer.
-	jr_error = $02 ; Job result code for error.
-
-	; Error numbers when calling print_error
-
-	errno_readerror = $03
-
-	; Error numbers when calling format_print_error
-	
-	errno_format_readerror = $02
-	errno_format_writeprotect = $08
-
-	; Zero page memory locations.
-
-	jm_buffer_0 = $0000 ; Job memory for buffer 0.
-	jm_buffer_1 = $0001 ; Job memory for buffer 1.
-	jm_buffer_2 = $0002 ; Job memory for buffer 2.
-	jm_buffer_3 = $0003 ; Job memory for buffer 3.
-	jm_buffer_4 = $0004 ; Job memory for buffer 4.
-	jm_buffer_5 = $0005 ; Job memory for buffer 5.
-
-	disc_id_0 = $12     ; Storage for disc ID.
-	disc_id_1 = $13
-
-	dc_command_register = $20 ; DC command register for drive 0.
-
-	current_buffer_track_ptr = $32 ; Pointer to memory cell holding current buffer's track no.
-
-	format_current_track = $51 ; During formatting, holds current track number.
-
-	current_track_number = $80
-
-	via1_timer_trigger_clear_by_read = $1804 ; Reading from here clears timer interrupt
-	via1_timer_trigger_by_write = $1805 ; Writing here (re)starts timer.
-	via1_timer_value_low = $1806 ; Low byte of timer latch.
-	via1_timer_value_high = $1807 ; Low byte of timer latch.
-	via1_timer_control = $180b ; Timer control register of Via 1.
-	via1_interrupt_status = $180d ; Interrupt status register.
-	
-	via2_drive_port = $1c00	   ; Port B of Via 2.
-	
-	via2_drive_data = $1c01    ; Port A of Via 2: Read or write data byte.
-
-	
-	; Via control bits.
-
-	via_timer_start_stop_bit = $40 ; Bit 6 of timer control register.
-
-	via1_interrupt_status_timer = $40 ; Bit 6 is set if timer underflow occurred.
-	
-	via2_drive_port_write_protect_bit = $10
-
-	; GCR coding.
-	gcr_empty_byte = $55
+	!source "assembly/definitions.asm" ; Include standard definitions.
 	
 	jsr led_on
 	
@@ -108,7 +38,7 @@ wait_format_complete:
 	cmp #jr_error
 	bcc format_ok ; execution result < jr_error.
 	
-	lda #errno_readerror
+	lda #errno_readerror_21
 	ldx #$00
 	jmp print_error
 
@@ -125,7 +55,8 @@ format_job:
 	jmp format_init_head    ; Position head at track 1
 
 in_progress:
-	ldy #$00			  ; Zero offset, needed for indirect zero-page addressing.
+	ldy #$00			  ; Zero offset, needed for indirect
+					  ; zero-page addressing.
 	cmp (current_buffer_track_ptr), y ; Did we reach a new track?
 	beq no_track_change
 	sta (current_buffer_track_ptr), y ; Update track for current buffer
@@ -135,18 +66,24 @@ in_progress:
 no_track_change:
 	lda via2_drive_port
 	and #via2_drive_port_write_protect_bit
-	bne write_protect_off
+	bne measure_track_length
 	
 	lda #errno_format_writeprotect
 	jmp format_print_error
 
-write_protect_off:
+measure_track_length:
 	jsr format_delete_track
-	jsr format_wait_sync_cnt ; Wait for number of sync bytes specified in ($0621/$0622).
+	jsr format_wait_sync_cnt ; Wait for number of sync bytes
+				 ; specified in half_format_area_size
 
 	lda #gcr_empty_byte
 	sta via2_drive_data
 	jsr format_wait_sync_cnt
+	
+	; As we update our estimates, we should converge on having half
+	; the track filled with sync markers,
+	; and the other half filled with gcr_empty_byte.
+	
 	jsr dc_set_head_to_read
 	jsr dc_wait_for_sync
 
@@ -170,13 +107,13 @@ wait_for_sync_end:
 
 wait_for_new_sync_zone:	
 	lda via1_timer_trigger_clear_by_read
-wait_for_timer_interrupt:
+wait_for_timer_interrupt_or_new_sync_zone:
 	bit via2_drive_port
 	bpl new_sync_zone_found
 
 	lda via1_interrupt_status
 	asl
-	bpl wait_for_timer_interrupt
+	bpl wait_for_timer_interrupt_or_new_sync_zone
 
 	inx
 	bne wait_for_new_sync_zone
@@ -184,9 +121,178 @@ wait_for_timer_interrupt:
 	bne wait_for_new_sync_zone
 
 	; It took way too long to find the next sync marker. Disc not rotating?
-	lda #errno_format_readerror
+	lda #errno_readerror_20
 	jmp format_print_error
 
 new_sync_zone_found:
 	; At this point, (y * 256 + x) * 0.1 ms = duration between two syncs.
-	jmp $fb5c
+	stx format_area_diff_low
+	sty format_area_diff_high
+
+	; Now measure the duration of the new sync area.
+	ldx #$00 
+	ldy #$00
+
+wait_for_end_sync_zone:	
+	lda via1_timer_trigger_clear_by_read
+
+wait_for_timer_interrupt_or_end_of_sync_zone:
+	bit via2_drive_port
+	bmi sync_zone_end_found
+
+	lda via1_interrupt_status
+	asl
+	bpl wait_for_timer_interrupt_or_end_of_sync_zone
+	inx
+	bne wait_for_end_sync_zone
+	iny
+	bne wait_for_end_sync_zone
+	
+	; It took way too long to find end of sync zone. Disc not rotating?
+	lda #errno_readerror_20
+	jmp format_print_error
+
+sync_zone_end_found:
+	sec
+	
+	txa  ; Build diff = duration_of_sync - duration_of_non_sync
+	sbc format_area_diff_low
+	tax
+	sta format_area_diff_low
+	tya
+	sbc format_area_diff_high
+	tay
+	sta format_area_diff_high
+
+	; This block produces the absolute value x + y * 256 = | x + y * 256 |
+	bpl abs_done
+	eor #$ff   
+	tay
+	txa	
+	eor #$ff
+	tax
+	inx	
+	bne abs_done
+	iny ; Overflow from lower to higher byte.
+abs_done:
+	; x + y * 256 now holds the absolute value of the duration difference (in 0.1 ms units).
+
+	tya
+	bne has_difference_in_high_byte
+
+	cpx #$04
+	bcc difference_acceptable ; difference is less than 4 * 0.1 ms.
+has_difference_in_high_byte:
+
+	asl format_area_diff_low  ; format_area_diff = format_area_diff * 2
+	rol format_area_diff_high ; This may look unintuitive at first, but note that
+	clc                       ; format_area_diff has a different unit (0.1 ms units)
+				  ; than half_format_area_size (number of sync markers).
+	                          ; From this logic it follows that duration(sync) ~ 4 * 0.1 ms.
+
+	lda format_area_diff_low  ; Add 2*difference to half_format_area_size (signed).
+	adc half_format_area_size_low
+	sta half_format_area_size_low
+	lda format_area_diff_high
+	adc half_format_area_size_high
+	sta half_format_area_size_high
+	
+	jmp measure_track_length
+
+difference_acceptable:
+	; half_format_area_size now contains half the number of sync bytes for this track.
+	ldx #$00
+	ldy #$00
+	clv
+count_bytes:	
+	lda via2_drive_port 	; Count bytes until the next sync. Pray we haven't missed
+	bpl sync_found		; any while checking our duration deviation.
+	bvc count_bytes		; The overflow flag is wired to be the BYTE READY signal.
+	clv
+
+	; We have a byte. Count it.
+	inx
+	bne count_bytes
+	iny
+	bne count_bytes
+
+	lda errno_readerror_21 	; Too many bytes until next sync byte.
+	jmp format_print_error
+	
+sync_found:
+	txa 			; num_bytes_per_track = (y * 256 + x) * 2
+	asl
+	sta format_num_bytes_per_track_low
+	tya
+	rol
+	sta format_num_bytes_per_track_high
+
+	lda #!via_timer_start_stop_bit ; Stop timer.
+	and via1_timer_control
+	sta via1_timer_control
+
+	ldx current_track_sector_count
+	ldy #$00
+	tya
+sectors_left:
+	clc
+	adc #$66		; 0x66 = 102
+	bcc no_overflow
+
+	iny			; Exceeded 
+no_overflow:
+	iny
+	
+	dex			; count down sectors to process.
+	bne sectors_left
+
+	; After this counting exercise, we have the space needed for all our sector
+	; content plus overhead.
+	; a = (current_track_sector_count * 102) % 256
+	; y = current_track_sector_count + (current_track_sector_count * 102) / 256
+
+	eor #$ff
+	sec
+	adc #$00 			   	; a = -a
+	clc
+	adc format_num_bytes_per_track_low
+	bcs carry_set
+	dec format_num_bytes_per_track_high 	; We wrapped to positive due to the addition.
+						; Decrease high byte as well.
+carry_set:
+	; a = total_bytes_in_gap % 256
+	; Now calculate the high byte of total_bytes_in_gap.
+
+	tax					; x = a
+	tya
+	eor #$ff
+	sec
+	adc #$00				; a = -y
+	clc
+	adc format_num_bytes_per_track_high
+	bpl total_bytes_in_gap_positive
+
+	lda #errno_readerror_22	; Not enough capacity to fit our payload.
+	jmp format_print_error
+	
+total_bytes_in_gap_positive:
+	; total bytes in gap = a * 256 + x
+	
+	tay			; y = total_gap_bytes / 256
+	txa			; a = total_gap_bytes % 256
+	ldx #$00
+bytes_per_gap_division_loop:	
+	sec
+	sbc current_track_sector_count
+	bcs bytes_per_gap_division_no_overflow ; Carry flag still set?
+	dey
+	bmi bytes_per_gap_division_done ; More gap bytes?
+bytes_per_gap_division_no_overflow:
+	inx
+	bne bytes_per_gap_division_loop
+bytes_per_gap_division_done:
+	stx format_num_bytes_per_gap
+	jmp $fc27
+
+	
+	

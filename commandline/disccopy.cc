@@ -22,6 +22,9 @@ using namespace std::chrono_literals;
 // Max amount of data for a single M-W command is 35 bytes.
 static const size_t kMaxMWSize = 35;
 
+// Memory start location in the 1541's memory for our format routine.
+static const size_t kFormatCodeStart = 0x0630;
+
 // Convert input to a string of BCD hex numbers.
 static std::string BytesToHex(const std::string &input) {
   std::string result;
@@ -68,6 +71,8 @@ static bool WriteMemory(IECBusConnection* connection, int target,
 			unsigned short int target_address,
 			size_t num_bytes,
 			const unsigned char* source, IECStatus* status) {
+  std::cout << "WriteMemory, num_bytes = " << num_bytes << std::endl;
+  
   size_t bytes_written = 0;
   while (num_bytes - bytes_written > 0) {
     std::string request = "M-W";
@@ -158,14 +163,14 @@ int main(int argc, char *argv[]) {
 
   std::cout << "Formatting disc..." << std::endl;
 
-  if (!WriteMemory(connection.get(), target, 0x400, sizeof(format_bin),
-		   format_bin, &status)) {
+  if (!WriteMemory(connection.get(), target, kFormatCodeStart,
+		   sizeof(format_bin), format_bin, &status)) {
     std::cout << "WriteMemory: " << status.message << std::endl;
   }
   
   std::string request = "M-E";
-  request.append(1, 0x00);
-  request.append(1, 0x04);  
+  request.append(1, char(kFormatCodeStart & 0xff));
+  request.append(1, char(kFormatCodeStart >> 8));
   std::cout << "Sending M-E" << std::endl;
   if (!connection->WriteToChannel(target, 15, request, &status)) {
     std::cout << "WriteToChannel: " << status.message << std::endl;

@@ -6,7 +6,7 @@
 def _acme_binary_impl(ctx):
     output = ctx.outputs.out
     ctx.actions.run_shell(
-        inputs = ctx.files.srcs,
+        inputs = ctx.files.srcs + ctx.files.includes,
         outputs = [output],
         command = "/home/weirdsoul/bin/acme -f %s -o %s %s" % (
             ctx.attr.format,
@@ -19,6 +19,7 @@ acme_binary = rule(
     attrs = {
         "format": attr.string(default = "plain"),
         "srcs": attr.label_list(allow_files = True),
+        "includes": attr.label_list(allow_files = True),
     },
     outputs = {"out": "%{name}.o"},
     implementation = _acme_binary_impl,

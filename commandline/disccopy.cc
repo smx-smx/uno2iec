@@ -256,6 +256,14 @@ int main(int argc, char *argv[]) {
       std::cout << "WriteToChannel: " << status.message << std::endl;
       return 1;
     }
+    // Get the result for the write command.
+    if (!connection->ReadFromChannel(target, 15, &response, &status)) {
+      std::cout << "ReadFromChannel: " << status.message << std::endl;
+      return 1;
+    }
+    if (response != "00, OK,00,00\r") {
+      std::cout << "Status: " << response << std::endl;
+    }
 
     if (verify) {
       // Verify buffer content.

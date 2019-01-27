@@ -32,6 +32,7 @@
 	errno_readerror_21 = $03      ; 21, READ ERROR
 	errno_readerror_22 = $04      ; 22, READ ERROR
 	errno_readerror_23 = $05      ; 23, READ ERROR
+	errno_readerror_24 = $06      ; 24, READ ERROR
 
 	; Error numbers when calling format_print_error
 	
@@ -48,6 +49,8 @@
 
 	disc_id_0 = $12     ; Storage for disc ID.
 	disc_id_1 = $13
+
+	disc_change_status = $1c 	; If != 0x00, the disc has changed.
 
 	dc_command_register = $20 	; DC command register for drive 0.
 	dc_current_track_number = $22 	; DC current track number.
@@ -77,7 +80,15 @@
 	
 	current_track_number = $80
 
+	current_buffer_number = $f9
+
+	drive_activity_status = $ff 	     ; If != 0x00, drive is active.
+
 	processor_stack_page = $0100         ; Contains the processor stack and auxiliary data.
+	bam_version_code = $0101	     ; Contains the BAM version code after disc is initialized.
+
+	bam_dirty_flag = $0251		     ; If != 0x00, the BAM is modified and needs to be written.
+
 
 	format_sector_header_buffer = $0300  ; Contains sector header data.
 
@@ -93,6 +104,8 @@
 	via2_drive_port = $1c00	   ; Port B of Via 2.
 	
 	via2_drive_data = $1c01    ; Port A of Via 2: Read or write data byte.
+
+	disc_format_marker = $fed5 ; Format marker 'A' indicating that this is in the correct format.
 
 	
 	; Via control bits.

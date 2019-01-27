@@ -38,6 +38,13 @@ wait_format_complete:
 	jmp print_error
 
 format_ok:
+	lda disc_format_marker  ; Write format marker.
+	sta bam_version_code
+	lda #$00
+	sta bam_dirty_flag	; Clear BAM dirty flag.
+	sta disc_change_status  ; Clear disc change status.
+	sta drive_activity_status
+
 	rts
 
 	; The format job is called in the context of the the DC interrupt.
@@ -314,7 +321,7 @@ bytes_per_gap_division_done:
 	lda #errno_readerror_23
 	jmp format_print_error
 
-num_bytes_per_gap_ok:	
+num_bytes_per_gap_ok:
 	lda #$00
 	sta format_sector_counter
 	tay
@@ -379,10 +386,10 @@ prepare_sector_header_loop:
 	jsr format_calculate_checksum	
 	sta sector_data_checksum
 
-	jsr format_convert_content_to_gcr
+	jsr format_convert_content_to_gcr 	; Includes 0x07 data block header signature.
 
 	lda #$00
-	sta current_buffer_track_ptr    ; Store offset into sector header.
+	sta current_buffer_track_ptr	; Store offset into sector header.
 
 	jsr format_write_empty_track
 	
@@ -471,8 +478,10 @@ write_last_track_byte_loop:	; Not exactly sure what this is for, but I assume
 	bvc write_last_track_byte_loop
 	clv
 
-	; TODO(aeckleder): The original formatting code has some verification here.
-	; Do we need it as well?
+	jsr dc_set_head_to_read ; Turn off writing, otherwise we just overwrite all we did above.
+
+	; We don't verify anything during format. We'll find out soon enough
+	; if anything's broken when copying.
 
 	inc format_current_track
 	lda format_current_track
@@ -526,4 +535,6 @@ format_num_bytes_per_gap:
 	!8 0			; Number of bytes in each gap between sectors.
 format_sector_counter:
 	!8 0			; Counts sectors while building the data buffer.
+verify_retry_counter:
+	!8 0			; Count down number of retries during verify.
 

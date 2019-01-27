@@ -96,6 +96,13 @@ no_track_change:
 	jmp format_print_error
 
 measure_track_length:
+	lda format_current_track
+	cmp #$24		; When outside the standard formatting zone,
+	bcc normal_range	; make sure we still have the correct sector
+	lda #$11		; per track count (17 sectors like zone 4).
+	sta current_track_sector_count
+
+normal_range:	
 	jsr format_delete_track
 	jsr wait_sync_cnt
 	lda #gcr_empty_byte

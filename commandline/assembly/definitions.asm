@@ -24,6 +24,8 @@
 	; DC Job codes.
 
 	jc_execute_buffer = $e0 ; Job code to execute code in buffer.
+	jc_write_buffer = $90   ; Write the buffer to disc.
+
 	jr_error = $02 ; Job result code for error.
 
 	; Error numbers when calling print_error
@@ -46,6 +48,9 @@
 	jm_buffer_3 = $0003 ; Job memory for buffer 3.
 	jm_buffer_4 = $0004 ; Job memory for buffer 4.
 	jm_buffer_5 = $0005 ; Job memory for buffer 5.
+
+	track_for_job_buffer_1 = $0008
+	sector_for_job_buffer_1 = $0009
 
 	disc_id_0 = $12     ; Storage for disc ID.
 	disc_id_1 = $13
@@ -86,6 +91,8 @@
 
 	processor_stack_page = $0100         ; Contains the processor stack and auxiliary data.
 	bam_version_code = $0101	     ; Contains the BAM version code after disc is initialized.
+
+	input_buffer = $0200		     ; This is where our command input ends up.
 
 	bam_dirty_flag = $0251		     ; If != 0x00, the BAM is modified and needs to be written.
 

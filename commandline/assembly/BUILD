@@ -14,6 +14,17 @@ acme_binary(
     ],
 )
 
+acme_binary(
+    name = "write_block",
+    format = "plain",
+    srcs = [
+        "write_block.asm"
+    ],
+    includes = [
+        "definitions.asm",
+    ],
+)
+
 cc_binary(
     name = "bin_to_array",
     srcs = [
@@ -28,4 +39,10 @@ bin_array(
     name = "format_h",
     file = ":format",
     symbol = "format_bin",
+)
+
+bin_array(
+    name = "write_block_h",
+    file = ":write_block",
+    symbol = "write_block_bin",
 )

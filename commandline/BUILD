@@ -59,6 +59,7 @@ cc_binary(
     srcs = [
         "disccopy.cc",
         "//assembly:format_h",
+        "//assembly:write_block_h",
     ],
     deps = [
         ":iec_host_lib",

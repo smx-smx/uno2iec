@@ -7,6 +7,7 @@
 #include <sys/types.h>
 
 #include "assembly/format_h.h"
+#include "assembly/write_block_h.h"
 #include "boost/format.hpp"
 #include "boost/program_options/cmdline.hpp"
 #include "boost/program_options/options_description.hpp"
@@ -23,9 +24,12 @@ using namespace std::chrono_literals;
 static const size_t kMaxMWSize = 35;
 
 // Memory start location in the 1541's memory for our format routine.
-static const size_t kFormatCodeStart = 0x0500;
+static const size_t kFormatCodeStart = 0x500;
 // We skip the first three bytes, because they're a jmp into the format job.
 static const size_t kFormatEntryPoint = 0x503;
+
+// Memory start location in the 1541's memory for write block.
+static const size_t kWriteBlockCodeStart = 0x500;
 
 // Convert input to a string of BCD hex numbers.
 static std::string BytesToHex(const std::string &input) {
@@ -83,7 +87,7 @@ static bool WriteMemory(IECBusConnection *connection, int target,
     size_t num_data_bytes = std::min(kMaxMWSize, num_bytes - bytes_written);
     request.append(1, num_data_bytes);
     for (size_t i = 0; i < num_data_bytes; ++i) {
-      request.append(1, format_bin[bytes_written + i]);
+      request.append(1, source[bytes_written + i]);
     }
     if (!connection->WriteToChannel(target, 15, request, status)) {
       std::cout << "WriteToChannel: " << status->message << std::endl;
@@ -191,6 +195,12 @@ int main(int argc, char *argv[]) {
     std::cout << "Formatting status: " << response << std::endl;
   }
 
+  if (!WriteMemory(connection.get(), target, kWriteBlockCodeStart,
+                   sizeof(write_block_bin), write_block_bin, &status)) {
+    std::cout << "WriteMemory: " << status.message << std::endl;
+    return 1;
+  }
+
   std::cout << "Opening source '" << source << "'." << std::endl;
   int fd = open(source.c_str(), O_RDONLY);
   if (fd == -1) {
@@ -208,7 +218,23 @@ int main(int argc, char *argv[]) {
 
   std::cout << "Opened direct access channel." << std::endl;
 
-  auto cmd = boost::format("B-P:%u 0") % da_chan;
+  // Perform a dummy read operation to initialize the disc id.
+  auto cmd = boost::format("U1:%u 0 %u %u") % da_chan % 1 % 0;
+  std::cout << "cmd=" << cmd << std::endl;
+  if (!connection->WriteToChannel(target, 15, cmd.str(), &status)) {
+    std::cout << "WriteToChannel: " << status.message << std::endl;
+    return 1;
+  }
+  // Get the result for the initial read command.
+  if (!connection->ReadFromChannel(target, 15, &response, &status)) {
+    std::cout << "ReadFromChannel: " << status.message << std::endl;
+    return 1;
+  }
+  if (response != "00, OK,00,00\r") {
+    std::cout << "Initial read status: " << response << std::endl;
+  }
+
+  cmd = boost::format("B-P:%u 0") % da_chan;
   std::cout << "cmd=" << cmd << std::endl;
   if (!connection->WriteToChannel(target, 15, cmd.str(), &status)) {
     std::cout << "WriteToChannel: " << status.message << std::endl;
@@ -242,12 +268,17 @@ int main(int argc, char *argv[]) {
     GetTrackSector(s, &track, &sector);
 
     // Write the buffer to disc.
-    auto cmd = boost::format("U2:%u 0 %u %u") % da_chan % track % sector;
-    std::cout << "cmd=" << cmd << std::endl;
-    if (!connection->WriteToChannel(target, 15, cmd.str(), &status)) {
+    std::string request = "M-E";
+    request.append(1, char(kWriteBlockCodeStart & 0xff));
+    request.append(1, char(kWriteBlockCodeStart >> 8));
+    request.append(1, char(track));
+    request.append(1, char(sector));
+    std::cout << "Writing track " << track << " sector " << sector << std::endl;
+    if (!connection->WriteToChannel(target, 15, request, &status)) {
       std::cout << "WriteToChannel: " << status.message << std::endl;
       return 1;
     }
+
     // Get the result for the write command.
     if (!connection->ReadFromChannel(target, 15, &response, &status)) {
       std::cout << "ReadFromChannel: " << status.message << std::endl;
@@ -259,7 +290,7 @@ int main(int argc, char *argv[]) {
 
     if (verify) {
       // Verify buffer content.
-      cmd = boost::format("U1:%u 0 %u %u") % da_chan % track % sector;
+      auto cmd = boost::format("U1:%u 0 %u %u") % da_chan % track % sector;
       std::cout << "cmd=" << cmd << std::endl;
       if (!connection->WriteToChannel(target, 15, cmd.str(), &status)) {
         std::cout << "WriteToChannel: " << status.message << std::endl;

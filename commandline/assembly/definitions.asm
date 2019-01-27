@@ -14,7 +14,8 @@
 							; buffer as referenced by current_buffer_start.
 	format_calculate_checksum = $f5e9       ; Build checksum over content in current buffer.
 	format_convert_content_to_gcr = $f78f	; Convert content in current buffer to GCR (in place
-						; plus auxiliary space in $01bb-$01ff). 
+						; plus auxiliary space in $01bb-$01ff).
+	format_convert_gcr_to_binary = $f5f2	; Convert buffer + aux space from GCR to binary.
 	
 	dc_set_head_to_read = $fe00  		; Switch drive head to reading.
 	dc_wait_for_sync = $f556     		; Wait for sync signal.
@@ -35,10 +36,7 @@
 	errno_readerror_22 = $04      ; 22, READ ERROR
 	errno_readerror_23 = $05      ; 23, READ ERROR
 	errno_readerror_24 = $06      ; 24, READ ERROR
-
-	; Error numbers when calling format_print_error
-	
-	errno_format_writeprotect = $08
+	errno_writeprotect = $08
 
 	; Zero page memory locations.
 
@@ -51,6 +49,8 @@
 
 	track_for_job_buffer_1 = $0008
 	sector_for_job_buffer_1 = $0009
+	track_for_job_buffer_2 = $000a
+	sector_for_job_buffer_2 = $000b
 
 	disc_id_0 = $12     ; Storage for disc ID.
 	disc_id_1 = $13
@@ -112,6 +112,10 @@
 	
 	via2_drive_data = $1c01    ; Port A of Via 2: Read or write data byte.
 
+	via2_drive_direction = $1c03 ; Port A of Via 2: Read (0x00) or write (0xff).
+
+	via2_aux_control = $1c0c   ; Bit 1: Enable processor overflow flag, Bit 5: Read (0) or Write (1)
+
 	disc_format_marker = $fed5 ; Format marker 'A' indicating that this is in the correct format.
 
 	
@@ -122,6 +126,10 @@
 	via1_interrupt_status_timer = $40 ; Bit 6 is set if timer underflow occurred.
 	
 	via2_drive_port_write_protect_bit = $10 ; Bit 4 controls write protection.
+
+	via2_drive_direction_read = 0x00
+	via2_drive_direction_write = 0xff
+
 
 	; GCR coding.
 	gcr_empty_byte = $55

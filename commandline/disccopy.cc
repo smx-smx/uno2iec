@@ -30,6 +30,8 @@ static const size_t kFormatEntryPoint = 0x503;
 
 // Memory start location in the 1541's memory for write block.
 static const size_t kWriteBlockCodeStart = 0x500;
+// We skip the first three bytes, because they're a jmp into the write job.
+static const size_t kWriteBlockEntryPoint = 0x503;
 
 // Convert input to a string of BCD hex numbers.
 static std::string BytesToHex(const std::string &input) {
@@ -269,8 +271,8 @@ int main(int argc, char *argv[]) {
 
     // Write the buffer to disc.
     std::string request = "M-E";
-    request.append(1, char(kWriteBlockCodeStart & 0xff));
-    request.append(1, char(kWriteBlockCodeStart >> 8));
+    request.append(1, char(kWriteBlockEntryPoint & 0xff));
+    request.append(1, char(kWriteBlockEntryPoint >> 8));
     request.append(1, char(track));
     request.append(1, char(sector));
     std::cout << "Writing track " << track << " sector " << sector << std::endl;

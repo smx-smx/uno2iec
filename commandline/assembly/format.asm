@@ -92,7 +92,7 @@ no_track_change:
 	and #via2_drive_port_write_protect_bit
 	bne measure_track_length
 	
-	lda #errno_format_writeprotect
+	lda #errno_writeprotect
 	jmp format_print_error
 
 measure_track_length:

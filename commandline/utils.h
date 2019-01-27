@@ -32,6 +32,7 @@ struct IECStatus {
     INVALID_ARGUMENT = 0x03,
     IEC_CONNECTION_FAILURE = 0x04,
     DRIVE_ERROR = 0x05,
+    END_OF_FILE = 0x06,
   };
   IECStatusCode status_code;
   std::string message; // A status message describing the status.

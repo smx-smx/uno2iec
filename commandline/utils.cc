@@ -31,6 +31,9 @@ void SetError(IECStatus::IECStatusCode status_code, const std::string &context,
   case IECStatus::DRIVE_ERROR:
     status->message = "Drive error";
     break;
+  case IECStatus::END_OF_FILE:
+    status->message = "End of file error";
+    break;
   }
   if (!context.empty()) {
     status->message = context + ": " + status->message;
@@ -125,6 +128,11 @@ bool BufferedReadWriter::ReadTerminatedString(char term_symbol,
         SetErrorFromErrno(IECStatus::CONNECTION_FAILURE, "read", status);
         return false;
       }
+      if (res == 0) {
+        // End of file.
+        SetErrorFromErrno(IECStatus::END_OF_FILE, "read", status);
+        return false;
+      }
       if (res > 0) {
         // We obtained some new data. Update data_end_ and try to find the
         // terminator within the newly read data (outer loop).
@@ -171,6 +179,11 @@ bool BufferedReadWriter::ReadUpTo(size_t min_length, size_t max_length,
     ssize_t res = read(fd_, buffer_, read_max);
     if (res == -1 && errno != EAGAIN && errno != EWOULDBLOCK) {
       SetErrorFromErrno(IECStatus::CONNECTION_FAILURE, "read", status);
+      return false;
+    }
+    if (res == 0) {
+      // End of file.
+      SetErrorFromErrno(IECStatus::END_OF_FILE, "read", status);
       return false;
     }
     if (res > 0) {

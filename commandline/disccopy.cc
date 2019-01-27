@@ -181,6 +181,8 @@ int main(int argc, char *argv[]) {
       return 1;
     }
 
+    std::cout << "Waiting for formatting to complete..." << std::endl;
+
     // Get the result for the disc format.
     if (!connection->ReadFromChannel(target, 15, &response, &status)) {
       std::cout << "ReadFromChannel: " << status.message << std::endl;
@@ -198,49 +200,39 @@ int main(int argc, char *argv[]) {
 
   std::cout << "Opened file." << std::endl;
 
-  unsigned int da_chan_write = 2;
-  // Open a direct access channel.
-  if (!connection->OpenChannel(target, da_chan_write, "#", &status)) {
+  unsigned int da_chan = 2;
+  // Open a direct access channel associated with buffer 1 (0x400-0x4ff).
+  if (!connection->OpenChannel(target, da_chan, "#1", &status)) {
     std::cout << "OpenChannel: " << status.message << std::endl;
   }
 
-  unsigned int da_chan_read = 3;
-  // Open a direct access channel.
-  if (!connection->OpenChannel(target, da_chan_read, "#", &status)) {
-    std::cout << "OpenChannel: " << status.message << std::endl;
-  }
+  std::cout << "Opened direct access channel." << std::endl;
 
-  std::cout << "Opened direct access channels." << std::endl;
-
-  auto cmd = boost::format("B-P:%u 0") % da_chan_write;
+  auto cmd = boost::format("B-P:%u 0") % da_chan;
   std::cout << "cmd=" << cmd << std::endl;
   if (!connection->WriteToChannel(target, 15, cmd.str(), &status)) {
     std::cout << "WriteToChannel: " << status.message << std::endl;
     return 1;
   }
 
-  cmd = boost::format("B-P:%u 0") % da_chan_read;
-  std::cout << "cmd=" << cmd << std::endl;
-  if (!connection->WriteToChannel(target, 15, cmd.str(), &status)) {
-    std::cout << "WriteToChannel: " << status.message << std::endl;
-    return 1;
-  }
-
-  std::cout << "Reset buffer offsets." << std::endl;
+  std::cout << "Reset buffer offset." << std::endl;
 
   BufferedReadWriter reader(fd);
 
-  // Copy the entire disc (683 sectors).
-  for (unsigned int s = 0; s < 683; ++s) {
+  // Copy the entire disc.
+  for (unsigned int s = 0;; ++s) {
     std::string current_sector;
     if (!reader.ReadUpTo(256, 256, &current_sector, &status)) {
+      if (status.status_code == IECStatus::END_OF_FILE) {
+        // We're done reading this image.
+        break;
+      }
       std::cout << "Failed reading from file: " << status.message << std::endl;
       return 1;
     }
 
     // Write the current sector to the buffer.
-    if (!connection->WriteToChannel(target, da_chan_write, current_sector,
-                                    &status)) {
+    if (!connection->WriteToChannel(target, da_chan, current_sector, &status)) {
       std::cout << "WriteToChannel: " << status.message << std::endl;
       return 1;
     }
@@ -250,7 +242,7 @@ int main(int argc, char *argv[]) {
     GetTrackSector(s, &track, &sector);
 
     // Write the buffer to disc.
-    auto cmd = boost::format("U2:%u 0 %u %u") % da_chan_write % track % sector;
+    auto cmd = boost::format("U2:%u 0 %u %u") % da_chan % track % sector;
     std::cout << "cmd=" << cmd << std::endl;
     if (!connection->WriteToChannel(target, 15, cmd.str(), &status)) {
       std::cout << "WriteToChannel: " << status.message << std::endl;
@@ -267,7 +259,7 @@ int main(int argc, char *argv[]) {
 
     if (verify) {
       // Verify buffer content.
-      cmd = boost::format("U1:%u 0 %u %u") % da_chan_read % track % sector;
+      cmd = boost::format("U1:%u 0 %u %u") % da_chan % track % sector;
       std::cout << "cmd=" << cmd << std::endl;
       if (!connection->WriteToChannel(target, 15, cmd.str(), &status)) {
         std::cout << "WriteToChannel: " << status.message << std::endl;
@@ -275,7 +267,7 @@ int main(int argc, char *argv[]) {
       }
       // Read the current sector from the buffer.
       std::string verify_content;
-      if (!connection->ReadFromChannel(target, da_chan_read, &verify_content,
+      if (!connection->ReadFromChannel(target, da_chan, &verify_content,
                                        &status)) {
         std::cout << "ReadFromChannel: " << status.message << std::endl;
         return 1;
@@ -290,16 +282,21 @@ int main(int argc, char *argv[]) {
                   << " bytes):" << std::endl;
         std::cout << BytesToHex(verify_content) << std::endl;
       }
+
+      // Position the buffer pointer in preparation for the next write
+      // (reading from the same buffer produces an off-by-one error).
+      cmd = boost::format("B-P:%u 0") % da_chan;
+      std::cout << "cmd=" << cmd << std::endl;
+      if (!connection->WriteToChannel(target, 15, cmd.str(), &status)) {
+        std::cout << "WriteToChannel: " << status.message << std::endl;
+        return 1;
+      }
     }
   }
 
   close(fd);
 
-  if (!connection->CloseChannel(target, da_chan_write, &status)) {
-    std::cout << "CloseChannel: " << status.message << std::endl;
-    return 1;
-  }
-  if (!connection->CloseChannel(target, da_chan_read, &status)) {
+  if (!connection->CloseChannel(target, da_chan, &status)) {
     std::cout << "CloseChannel: " << status.message << std::endl;
     return 1;
   }

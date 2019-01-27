@@ -123,7 +123,8 @@ TEST_F(BufferedReadWriterTest, ReadUpTo) {
   EXPECT_EQ(result, "rminated_string") << status.message;
 
   // Produce more data that is guaranteed not to be buffered yet.
-  const std::string kTerminatedString2 = "_terminated_string\rextra_data\r";
+  const std::string kTerminatedString2 =
+      "_terminated_string\rextra_data\rdangle";
   ProduceString(kTerminatedString2);
 
   // We expect to seamlessly pick up the next few characters after the '\r',

@@ -40,6 +40,16 @@ cc_library(
     ],
 )
 
+cc_library(
+    name = "drive_interface",
+    hdrs = [
+        "drive_interface.h",
+    ],
+    deps = [
+    	 ":utils",
+    ],
+)
+
 cc_test(
     name = "utils_test",
     srcs = [
@@ -62,6 +72,7 @@ cc_binary(
         "//assembly:write_block_h",
     ],
     deps = [
+    	":drive_interface",
         ":iec_host_lib",
         "@boost//:format",
         "@boost//:program_options",

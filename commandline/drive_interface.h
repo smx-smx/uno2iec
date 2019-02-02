@@ -26,14 +26,12 @@ public:
   virtual size_t GetNumSectors() = 0;
 
   // Read the sector specified by sector_number into *content. Returns true if
-  // successful,
-  // sets status otherwise.
+  // successful, sets status otherwise.
   virtual bool ReadSector(size_t sector_number, std::string *content,
                           IECStatus *status) = 0;
 
   // Write *content to the sector specified by sector_number. Returns true if
-  // successful,
-  // sets status otherwise.
+  // successful, sets status otherwise.
   virtual bool WriteSector(size_t sector_number, std::string *content,
                            IECStatus *status) = 0;
 };

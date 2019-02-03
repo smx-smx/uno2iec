@@ -13,7 +13,7 @@
 #include "boost/program_options/options_description.hpp"
 #include "boost/program_options/parsers.hpp"
 #include "boost/program_options/variables_map.hpp"
-#include "drive_interface.h"
+#include "cbm1541_drive.h"
 #include "iec_host_lib.h"
 #include "utils.h"
 

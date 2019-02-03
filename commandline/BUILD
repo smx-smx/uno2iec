@@ -40,16 +40,6 @@ cc_library(
     ],
 )
 
-cc_library(
-    name = "drive_interface",
-    hdrs = [
-        "drive_interface.h",
-    ],
-    deps = [
-    	 ":utils",
-    ],
-)
-
 cc_test(
     name = "utils_test",
     srcs = [
@@ -61,18 +51,44 @@ cc_test(
     ],
 )
 
+cc_library(
+    name = "drive_interface",
+    hdrs = [
+        "drive_interface.h",
+    ],
+    deps = [
+        ":utils",
+    ],
+)
+
+cc_library(
+    name = "cbm1541_drive",
+    srcs = [
+        "cbm1541_drive.cc",
+    ],
+    hdrs = [
+        "cbm1541_drive.h",
+    ],
+    deps = [
+        ":drive_interface",
+        ":iec_host_lib",
+        ":utils",
+    ],
+)
+
 # A tool to copy a 1541 floppy disc to a .d64 image and vice
 # versa using the IEC host library.
 cc_binary(
     name = "disccopy",
-    linkopts = [ "-lpthread" ],
     srcs = [
         "disccopy.cc",
         "//assembly:format_h",
         "//assembly:write_block_h",
     ],
+    linkopts = ["-lpthread"],
     deps = [
-    	":drive_interface",
+        ":cbm1541_drive",
+        ":drive_interface",
         ":iec_host_lib",
         "@boost//:format",
         "@boost//:program_options",

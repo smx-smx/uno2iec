@@ -65,6 +65,8 @@ cc_library(
     name = "cbm1541_drive",
     srcs = [
         "cbm1541_drive.cc",
+        "//assembly:format_h",
+        "//assembly:write_block_h",
     ],
     hdrs = [
         "cbm1541_drive.h",

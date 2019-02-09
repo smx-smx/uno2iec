@@ -26,12 +26,6 @@ public:
                    IECStatus *status) override;
 
 private:
-  // A pointer to the bus we'll be using to talk to the physical device.
-  IECBusConnection *bus_conn_;
-
-  // The device number of the physical device we're talking to.
-  char device_number_;
-
   // FirmareState represents the different custom firmware code fragments
   // we use to operate the drive.
   enum FirmwareState {
@@ -39,6 +33,23 @@ private:
     FW_CUSTOM_FORMATTING_CODE, // Drive holds formatting code.
     FW_CUSTOM_READ_WRITE_CODE, // Drive holds custom read/write routines.
   };
+
+  // Switch firmware state to firmware_state. After this method returns,
+  // any custom firmware code associated with this state will have been
+  // uploaded. In case of error, returns false and sets status.
+  bool SetFirmwareState(FirmwareState firmware_state, IECStatus *status);
+
+  // Write num_bytes of the content pointed to by source to target_address
+  // on the drive. Returns true if successful, sets status otherwise.
+  bool WriteMemory(unsigned short int target_address, size_t num_bytes,
+                   const unsigned char *source, IECStatus *status);
+
+  // A pointer to the bus we'll be using to talk to the physical device.
+  IECBusConnection *bus_conn_;
+
+  // The device number of the physical device we're talking to.
+  char device_number_;
+
   FirmwareState fw_state_;
 
   struct CustomFirmwareFragment {

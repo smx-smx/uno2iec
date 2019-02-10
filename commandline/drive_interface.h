@@ -30,9 +30,9 @@ public:
   virtual bool ReadSector(size_t sector_number, std::string *content,
                           IECStatus *status) = 0;
 
-  // Write *content to the sector specified by sector_number. Returns true if
+  // Write content to the sector specified by sector_number. Returns true if
   // successful, sets status otherwise.
-  virtual bool WriteSector(size_t sector_number, std::string *content,
+  virtual bool WriteSector(size_t sector_number, const std::string &content,
                            IECStatus *status) = 0;
 };
 

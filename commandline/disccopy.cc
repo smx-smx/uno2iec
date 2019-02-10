@@ -24,11 +24,6 @@ using namespace std::chrono_literals;
 // Max amount of data for a single M-W command is 35 bytes.
 static const size_t kMaxMWSize = 35;
 
-// Memory start location in the 1541's memory for our format routine.
-static const size_t kFormatCodeStart = 0x500;
-// We skip the first three bytes, because they're a jmp into the format job.
-static const size_t kFormatEntryPoint = 0x503;
-
 // Memory start location in the 1541's memory for write block.
 static const size_t kWriteBlockCodeStart = 0x500;
 // We skip the first three bytes, because they're a jmp into the write job.
@@ -43,37 +38,6 @@ static std::string BytesToHex(const std::string &input) {
                   .str();
   }
   return result;
-}
-
-// GetTrackSector translates from a sector index to corresponding
-// track and (track local) sector number according to a hardcoded
-// schema matching the 1541's sectors / track configuration.
-static void GetTrackSector(unsigned int s, unsigned int *track,
-                           unsigned int *sector) {
-  const unsigned int area1_sectors = 357;
-  const unsigned int area12_sectors = area1_sectors + 133;
-  const unsigned int area123_sectors = area12_sectors + 108;
-  if (s >= area123_sectors) {
-    *sector = s - area123_sectors;
-    *track = 31 + (*sector / 17);
-    *sector = *sector % 17;
-    return;
-  }
-  if (s >= area12_sectors) {
-    *sector = s - area12_sectors;
-    *track = 25 + (*sector / 18);
-    *sector = *sector % 18;
-    return;
-  }
-  if (s >= area1_sectors) {
-    *sector = s - area1_sectors;
-    *track = 18 + (*sector / 19);
-    *sector = *sector % 19;
-    return;
-  }
-  *sector = s;
-  *track = (*sector / 21) + 1;
-  *sector = *sector % 21;
 }
 
 static bool WriteMemory(IECBusConnection *connection, int target,
@@ -169,33 +133,16 @@ int main(int argc, char *argv[]) {
     return 1;
   }
   std::cout << "Initial drive status: " << response << std::endl;
+  std::unique_ptr<CBM1541Drive> drive =
+      std::make_unique<CBM1541Drive>(connection.get(), target);
 
   if (format) {
     std::cout << "Formatting disc..." << std::endl;
-
-    if (!WriteMemory(connection.get(), target, kFormatCodeStart,
-                     sizeof(format_bin), format_bin, &status)) {
-      std::cout << "WriteMemory: " << status.message << std::endl;
+    if (!drive->FormatDiscLowLevel(40, &status)) {
+      std::cout << "FormatDiscLowLevel: " << status.message << std::endl;
       return 1;
     }
-
-    std::string request = "M-E";
-    request.append(1, char(kFormatEntryPoint & 0xff));
-    request.append(1, char(kFormatEntryPoint >> 8));
-    std::cout << "Sending M-E" << std::endl;
-    if (!connection->WriteToChannel(target, 15, request, &status)) {
-      std::cout << "WriteToChannel: " << status.message << std::endl;
-      return 1;
-    }
-
-    std::cout << "Waiting for formatting to complete..." << std::endl;
-
-    // Get the result for the disc format.
-    if (!connection->ReadFromChannel(target, 15, &response, &status)) {
-      std::cout << "ReadFromChannel: " << status.message << std::endl;
-      return 1;
-    }
-    std::cout << "Formatting status: " << response << std::endl;
+    std::cout << "Formatting complete." << std::endl;
   }
 
   if (!WriteMemory(connection.get(), target, kWriteBlockCodeStart,
@@ -268,7 +215,7 @@ int main(int argc, char *argv[]) {
 
     unsigned int track = 1;
     unsigned int sector = 0;
-    GetTrackSector(s, &track, &sector);
+    CBM1541Drive::GetTrackSector(s, &track, &sector);
 
     // Write the buffer to disc.
     std::string request = "M-E";

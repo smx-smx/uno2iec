@@ -18,12 +18,20 @@ public:
   // CBM1541Drive instance.
   CBM1541Drive(IECBusConnection *bus_conn, char device_number);
 
-  bool FormatDiscLowLevel(size_t num_sectors, IECStatus *status) override;
+  ~CBM1541Drive();
+
+  bool FormatDiscLowLevel(size_t num_tracks, IECStatus *status) override;
   size_t GetNumSectors() override;
   bool ReadSector(size_t sector_number, std::string *content,
                   IECStatus *status) override;
-  bool WriteSector(size_t sector_number, std::string *content,
+  bool WriteSector(size_t sector_number, const std::string &content,
                    IECStatus *status) override;
+
+  // GetTrackSector translates from a sector index to corresponding
+  // track and (track local) sector number according to a hardcoded
+  // schema matching the 1541's sectors / track configuration.
+  static void GetTrackSector(unsigned int s, unsigned int *track,
+                             unsigned int *sector);
 
 private:
   // FirmareState represents the different custom firmware code fragments
@@ -44,6 +52,9 @@ private:
   bool WriteMemory(unsigned short int target_address, size_t num_bytes,
                    const unsigned char *source, IECStatus *status);
 
+  // Initialize direct access channel if it hasn't been initialized yet.
+  bool InitDirectAccessChannel(IECStatus *status);
+
   // A pointer to the bus we'll be using to talk to the physical device.
   IECBusConnection *bus_conn_;
 
@@ -58,6 +69,10 @@ private:
     size_t loading_address;      // Loading address of the binary.
   };
   static const std::map<FirmwareState, CustomFirmwareFragment> fw_fragment_map_;
+
+  // Direct access channel to use for reading / writing sector content.
+  // Initialized lazily by InitDirectAccessChannel().
+  int da_chan_ = -1;
 };
 
 #endif // CBM1541_DRIVE_H

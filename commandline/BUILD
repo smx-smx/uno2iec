@@ -75,6 +75,7 @@ cc_library(
         ":drive_interface",
         ":iec_host_lib",
         ":utils",
+        "@boost//:format",
     ],
 )
 

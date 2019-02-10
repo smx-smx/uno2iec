@@ -173,6 +173,8 @@ bool CBM1541Drive::SetFirmwareState(CBM1541Drive::FirmwareState firmware_state,
   // Exit early if we're already in the desired state.
   if (fw_state_ == firmware_state)
     return true;
+  fw_state_ = firmware_state;
+
   auto fw_it = fw_fragment_map_.find(firmware_state);
   // No specific firmware requirements for this state. We're done.
   if (fw_it == fw_fragment_map_.end())

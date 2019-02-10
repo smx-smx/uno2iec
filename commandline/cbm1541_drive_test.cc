@@ -50,4 +50,43 @@ TEST_F(CBM1541DriveTest, FormatDiscTest) {
       .WillOnce(Return(true));
 
   EXPECT_TRUE(drive.FormatDiscLowLevel(40, &status)) << status.message;
+
+  // Done with one call, prepare for the next one.
+  ::testing::Mock::VerifyAndClearExpectations(&conn);
+
+  // No need to do another upload, our formatting code is already
+  // installed on the drive and ready to execute.
+  EXPECT_CALL(conn, WriteToChannel(8, 15, StartsWith("M-E"), &status))
+      .Times(1)
+      .WillOnce(Return(true));
+  EXPECT_CALL(conn, ReadFromChannel(8, 15, _, &status))
+      .Times(1)
+      .WillOnce(DoAll(SetArgPointee<2>("00, OK,00,00\r"), Return(true)));
+
+  EXPECT_TRUE(drive.FormatDiscLowLevel(40, &status)) << status.message;
+
+  // Done with one call, prepare for the next one.
+  ::testing::Mock::VerifyAndClearExpectations(&conn);
+
+  // We expect connection failures to be passed through.
+  IECStatus failure_status;
+  failure_status.status_code = IECStatus::IEC_CONNECTION_FAILURE;
+  EXPECT_CALL(conn, WriteToChannel(8, 15, StartsWith("M-E"), &status))
+      .Times(1)
+      .WillOnce(DoAll(SetArgPointee<3>(failure_status), Return(false)));
+  EXPECT_FALSE(drive.FormatDiscLowLevel(40, &status));
+  EXPECT_EQ(status.status_code, IECStatus::IEC_CONNECTION_FAILURE);
+
+  // Done with one call, prepare for the next one.
+  ::testing::Mock::VerifyAndClearExpectations(&conn);
+
+  // Return a logical drive error after executing format.
+  EXPECT_CALL(conn, WriteToChannel(8, 15, StartsWith("M-E"), &status))
+      .Times(1)
+      .WillOnce(Return(true));
+  EXPECT_CALL(conn, ReadFromChannel(8, 15, _, &status))
+      .Times(1)
+      .WillOnce(DoAll(SetArgPointee<2>("42, ERROR,42,42\r"), Return(true)));
+  EXPECT_FALSE(drive.FormatDiscLowLevel(40, &status));
+  EXPECT_EQ(status.status_code, IECStatus::DRIVE_ERROR);
 }

@@ -31,33 +31,34 @@ public:
   // Reset the IEC bus by pulling the reset line to low. Returns true on
   // success. In case of an error, status will be set to an appropriate error
   // status.
-  bool Reset(IECStatus *status);
+  virtual bool Reset(IECStatus *status);
 
   // Open channel on the device with the specific device_number. The optional
   // data_string specifies data to send to the channel, e.g. a filename.
   // Its maximum size is 255 bytes. Returns true on success. In case of an
-  // error,
-  // status will be set to an appropriate error status.
-  bool OpenChannel(char device_number, char channel,
-                   const std::string &data_string, IECStatus *status);
+  // error, status will be set to an appropriate error status.
+  virtual bool OpenChannel(char device_number, char channel,
+                           const std::string &data_string, IECStatus *status);
 
   // Read from device_number, channel until an EOI is found or an error
   // occurred.
   // Sets *result to be the resulting string and returns true. If an error is
   // found, sets status and returns false.
-  bool ReadFromChannel(char device_number, char channel, std::string *result,
-                       IECStatus *status);
+  virtual bool ReadFromChannel(char device_number, char channel,
+                               std::string *result, IECStatus *status);
 
   // Write data_string to device_number, channel. Returns true if successful,
   // sets status and returns false otherwise. If data_string has > 256 bytes,
   // multiple requests will be generated.
-  bool WriteToChannel(char device_number, char channel,
-                      const std::string &data_string, IECStatus *status);
+  virtual bool WriteToChannel(char device_number, char channel,
+                              const std::string &data_string,
+                              IECStatus *status);
 
   // Close channel on the device with the specific device_number.
   // Returns true on success. In case of an error, status will be
   // set to an appropriate error status.
-  bool CloseChannel(char device_number, char channel, IECStatus *status);
+  virtual bool CloseChannel(char device_number, char channel,
+                            IECStatus *status);
 
   // Create IECBusConnection instance using the specified device_file and serial
   // port speed. If log_callback is specified, the function will be called for

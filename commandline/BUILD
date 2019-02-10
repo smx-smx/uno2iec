@@ -79,6 +79,19 @@ cc_library(
     ],
 )
 
+cc_test(
+    name = "cbm1541_drive_test",
+    srcs = [
+        "cbm1541_drive_test.cc",
+    ],
+    deps = [
+        ":cbm1541_drive",
+        ":iec_host_lib",
+        "@boost//:format",
+        "@com_github_google_googletest//:gtest_main",
+    ],
+)
+
 # A tool to copy a 1541 floppy disc to a .d64 image and vice
 # versa using the IEC host library.
 cc_binary(

@@ -168,23 +168,7 @@ int main(int argc, char *argv[]) {
 
   std::cout << "Opened direct access channel." << std::endl;
 
-  // Perform a dummy read operation to initialize the disc id.
-  auto cmd = boost::format("U1:%u 0 %u %u") % da_chan % 1 % 0;
-  std::cout << "cmd=" << cmd << std::endl;
-  if (!connection->WriteToChannel(target, 15, cmd.str(), &status)) {
-    std::cout << "WriteToChannel: " << status.message << std::endl;
-    return 1;
-  }
-  // Get the result for the initial read command.
-  if (!connection->ReadFromChannel(target, 15, &response, &status)) {
-    std::cout << "ReadFromChannel: " << status.message << std::endl;
-    return 1;
-  }
-  if (response != "00, OK,00,00\r") {
-    std::cout << "Initial read status: " << response << std::endl;
-  }
-
-  cmd = boost::format("B-P:%u 0") % da_chan;
+  auto cmd = boost::format("B-P:%u 0") % da_chan;
   std::cout << "cmd=" << cmd << std::endl;
   if (!connection->WriteToChannel(target, 15, cmd.str(), &status)) {
     std::cout << "WriteToChannel: " << status.message << std::endl;

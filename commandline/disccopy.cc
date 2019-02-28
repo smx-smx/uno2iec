@@ -21,14 +21,6 @@ namespace po = boost::program_options;
 
 using namespace std::chrono_literals;
 
-// Max amount of data for a single M-W command is 35 bytes.
-static const size_t kMaxMWSize = 35;
-
-// Memory start location in the 1541's memory for write block.
-static const size_t kWriteBlockCodeStart = 0x500;
-// We skip the first three bytes, because they're a jmp into the write job.
-static const size_t kWriteBlockEntryPoint = 0x503;
-
 // Convert input to a string of BCD hex numbers.
 static std::string BytesToHex(const std::string &input) {
   std::string result;
@@ -38,40 +30,6 @@ static std::string BytesToHex(const std::string &input) {
                   .str();
   }
   return result;
-}
-
-static bool WriteMemory(IECBusConnection *connection, int target,
-                        unsigned short int target_address, size_t num_bytes,
-                        const unsigned char *source, IECStatus *status) {
-  std::cout << "WriteMemory, num_bytes = " << num_bytes << std::endl;
-
-  size_t bytes_written = 0;
-  while (num_bytes - bytes_written > 0) {
-    std::string request = "M-W";
-    unsigned short int mem_pos = target_address + bytes_written;
-    request.append(1, mem_pos & 0xff);
-    request.append(1, mem_pos >> 8);
-    size_t num_data_bytes = std::min(kMaxMWSize, num_bytes - bytes_written);
-    request.append(1, num_data_bytes);
-    for (size_t i = 0; i < num_data_bytes; ++i) {
-      request.append(1, source[bytes_written + i]);
-    }
-    if (!connection->WriteToChannel(target, 15, request, status)) {
-      std::cout << "WriteToChannel: " << status->message << std::endl;
-      return false;
-    }
-    std::string response;
-    if (!connection->ReadFromChannel(target, 15, &response, status)) {
-      std::cout << "ReadFromChannel: " << status->message << std::endl;
-      return false;
-    }
-    if (response != "00, OK,00,00\r") {
-      SetError(IECStatus::DRIVE_ERROR, response, status);
-      return false;
-    }
-    bytes_written += num_data_bytes;
-  }
-  return true;
 }
 
 int main(int argc, char *argv[]) {
@@ -145,12 +103,6 @@ int main(int argc, char *argv[]) {
     std::cout << "Formatting complete." << std::endl;
   }
 
-  if (!WriteMemory(connection.get(), target, kWriteBlockCodeStart,
-                   sizeof(write_block_bin), write_block_bin, &status)) {
-    std::cout << "WriteMemory: " << status.message << std::endl;
-    return 1;
-  }
-
   std::cout << "Opening source '" << source << "'." << std::endl;
   int fd = open(source.c_str(), O_RDONLY);
   if (fd == -1) {
@@ -159,23 +111,6 @@ int main(int argc, char *argv[]) {
   }
 
   std::cout << "Opened file." << std::endl;
-
-  unsigned int da_chan = 2;
-  // Open a direct access channel associated with buffer 1 (0x400-0x4ff).
-  if (!connection->OpenChannel(target, da_chan, "#1", &status)) {
-    std::cout << "OpenChannel: " << status.message << std::endl;
-  }
-
-  std::cout << "Opened direct access channel." << std::endl;
-
-  auto cmd = boost::format("B-P:%u 0") % da_chan;
-  std::cout << "cmd=" << cmd << std::endl;
-  if (!connection->WriteToChannel(target, 15, cmd.str(), &status)) {
-    std::cout << "WriteToChannel: " << status.message << std::endl;
-    return 1;
-  }
-
-  std::cout << "Reset buffer offset." << std::endl;
 
   BufferedReadWriter reader(fd);
 
@@ -191,38 +126,18 @@ int main(int argc, char *argv[]) {
       return 1;
     }
 
-    // Write the current sector to the buffer.
-    if (!connection->WriteToChannel(target, da_chan, current_sector, &status)) {
-      std::cout << "WriteToChannel: " << status.message << std::endl;
+    if (!drive->WriteSector(s, current_sector, &status)) {
+      std::cout << "WriteSector: " << status.message << std::endl;
       return 1;
-    }
-
-    unsigned int track = 1;
-    unsigned int sector = 0;
-    CBM1541Drive::GetTrackSector(s, &track, &sector);
-
-    // Write the buffer to disc.
-    std::string request = "M-E";
-    request.append(1, char(kWriteBlockEntryPoint & 0xff));
-    request.append(1, char(kWriteBlockEntryPoint >> 8));
-    request.append(1, char(track));
-    request.append(1, char(sector));
-    std::cout << "Writing track " << track << " sector " << sector << std::endl;
-    if (!connection->WriteToChannel(target, 15, request, &status)) {
-      std::cout << "WriteToChannel: " << status.message << std::endl;
-      return 1;
-    }
-
-    // Get the result for the write command.
-    if (!connection->ReadFromChannel(target, 15, &response, &status)) {
-      std::cout << "ReadFromChannel: " << status.message << std::endl;
-      return 1;
-    }
-    if (response != "00, OK,00,00\r") {
-      std::cout << "Status: " << response << std::endl;
     }
 
     if (verify) {
+      // TODO(aeckleder): Remove this and read using the drive interface.
+      const int da_chan = 2;
+      unsigned int track = 1;
+      unsigned int sector = 0;
+      CBM1541Drive::GetTrackSector(s, &track, &sector);
+
       // Verify buffer content.
       auto cmd = boost::format("U1:%u 0 %u %u") % da_chan % track % sector;
       std::cout << "cmd=" << cmd << std::endl;
@@ -260,11 +175,6 @@ int main(int argc, char *argv[]) {
   }
 
   close(fd);
-
-  if (!connection->CloseChannel(target, da_chan, &status)) {
-    std::cout << "CloseChannel: " << status.message << std::endl;
-    return 1;
-  }
 
   // Get the final result.
   if (!connection->ReadFromChannel(target, 15, &response, &status)) {

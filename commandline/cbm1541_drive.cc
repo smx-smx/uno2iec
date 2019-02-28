@@ -73,7 +73,11 @@ bool CBM1541Drive::FormatDiscLowLevel(size_t num_tracks, IECStatus *status) {
   return true;
 }
 
-size_t CBM1541Drive::GetNumSectors() { return 0; }
+size_t CBM1541Drive::GetNumSectors() {
+  // Hardcoded 35 tracks disc.
+  // TODO(aeckleder): 40 track discs have 768 blocks.
+  return 683;
+}
 
 bool CBM1541Drive::ReadSector(size_t sector_number, std::string *content,
                               IECStatus *status) {

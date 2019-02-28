@@ -18,7 +18,7 @@ static const size_t kWriteBlockEntryPoint = 0x503;
 // We skip the first three bytes, because they're a jmp into the format job.
 static const size_t kFormatEntryPoint = 0x503;
 
-static const size_t kNumBytesPerSector = 0xff;
+static const size_t kNumBytesPerSector = 0x100;
 
 // The direct access channel to use.
 static const int kDirectAccessChannel = 2;

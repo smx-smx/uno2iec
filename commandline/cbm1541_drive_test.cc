@@ -11,6 +11,7 @@ using ::testing::DoAll;
 using ::testing::Return;
 using ::testing::SetArgPointee;
 using ::testing::StartsWith;
+using ::testing::StrEq;
 
 class MockIECBusConnection : public IECBusConnection {
 public:
@@ -89,4 +90,102 @@ TEST_F(CBM1541DriveTest, FormatDiscTest) {
       .WillOnce(DoAll(SetArgPointee<2>("42, ERROR,42,42\r"), Return(true)));
   EXPECT_FALSE(drive.FormatDiscLowLevel(40, &status));
   EXPECT_EQ(status.status_code, IECStatus::DRIVE_ERROR);
+}
+
+// TODO(aeckleder): Test failure when writing to DA channel.
+TEST_F(CBM1541DriveTest, WriteSectorTest) {
+  MockIECBusConnection conn;
+  CBM1541Drive drive(&conn, 8);
+  IECStatus status;
+
+  // We expect to receive one or more memory writes.
+  EXPECT_CALL(conn, WriteToChannel(8, 15, StartsWith("M-W"), &status))
+      .Times(AtLeast(1))
+      .WillRepeatedly(Return(true));
+  // And when asked for status we'll say that everything is fine.
+  EXPECT_CALL(conn, ReadFromChannel(8, 15, _, &status))
+      .Times(AtLeast(1))
+      .WillRepeatedly(DoAll(SetArgPointee<2>("00, OK,00,00\r"), Return(true)));
+
+  // Opening DA channel and positioning block pointer (done once).
+  EXPECT_CALL(conn, OpenChannel(8, 2, "#1", &status))
+      .Times(1)
+      .WillOnce(Return(true));
+  EXPECT_CALL(conn, WriteToChannel(8, 15, StrEq("B-P:2 0"), &status))
+      .Times(1)
+      .WillOnce(Return(true));
+
+  std::string content(256, 0x42);
+  // Expect sector content to be written to our DA channel.
+  EXPECT_CALL(conn, WriteToChannel(8, 2, StrEq(content), &status))
+      .Times(1)
+      .WillOnce(Return(true));
+
+  // Finally, we expect a single memory execute.
+  EXPECT_CALL(conn, WriteToChannel(8, 15, StartsWith("M-E"), &status))
+      .Times(1)
+      .WillOnce(Return(true));
+
+  EXPECT_TRUE(drive.WriteSector(42, content, &status)) << status.message;
+
+  // Done with one call, prepare for the next one.
+  ::testing::Mock::VerifyAndClearExpectations(&conn);
+
+  // Expect sector content to be written to our DA channel.
+  EXPECT_CALL(conn, WriteToChannel(8, 2, StrEq(content), &status))
+      .Times(1)
+      .WillOnce(Return(true));
+
+  // No need to do another upload, our write sector code is already
+  // installed on the drive and ready to execute.
+  EXPECT_CALL(conn, WriteToChannel(8, 15, StartsWith("M-E"), &status))
+      .Times(1)
+      .WillOnce(Return(true));
+  EXPECT_CALL(conn, ReadFromChannel(8, 15, _, &status))
+      .Times(1)
+      .WillOnce(DoAll(SetArgPointee<2>("00, OK,00,00\r"), Return(true)));
+
+  EXPECT_TRUE(drive.WriteSector(43, content, &status)) << status.message;
+
+  // Done with one call, prepare for the next one.
+  ::testing::Mock::VerifyAndClearExpectations(&conn);
+
+  EXPECT_CALL(conn, WriteToChannel(8, 2, StrEq(content), &status))
+      .Times(1)
+      .WillOnce(Return(true));
+
+  // We expect connection failures to be passed through.
+  IECStatus failure_status;
+  failure_status.status_code = IECStatus::IEC_CONNECTION_FAILURE;
+  EXPECT_CALL(conn, WriteToChannel(8, 15, StartsWith("M-E"), &status))
+      .Times(1)
+      .WillOnce(DoAll(SetArgPointee<3>(failure_status), Return(false)));
+  EXPECT_FALSE(drive.WriteSector(42, content, &status));
+  EXPECT_EQ(status.status_code, IECStatus::IEC_CONNECTION_FAILURE);
+
+  // Done with one call, prepare for the next one.
+  ::testing::Mock::VerifyAndClearExpectations(&conn);
+
+  EXPECT_CALL(conn, WriteToChannel(8, 2, StrEq(content), &status))
+      .Times(1)
+      .WillOnce(Return(true));
+
+  // Return a logical drive error after executing write sector.
+  EXPECT_CALL(conn, WriteToChannel(8, 15, StartsWith("M-E"), &status))
+      .Times(1)
+      .WillOnce(Return(true));
+  EXPECT_CALL(conn, ReadFromChannel(8, 15, _, &status))
+      .Times(1)
+      .WillOnce(DoAll(SetArgPointee<2>("42, ERROR,42,42\r"), Return(true)));
+  EXPECT_FALSE(drive.WriteSector(42, content, &status));
+  EXPECT_EQ(status.status_code, IECStatus::DRIVE_ERROR);
+
+  // Done with one call, prepare for the next one.
+  ::testing::Mock::VerifyAndClearExpectations(&conn);
+
+  EXPECT_CALL(conn, WriteToChannel(8, 2, StrEq(content), &status))
+      .Times(1)
+      .WillOnce(DoAll(SetArgPointee<3>(failure_status), Return(false)));
+  EXPECT_FALSE(drive.WriteSector(42, content, &status));
+  EXPECT_EQ(status.status_code, IECStatus::IEC_CONNECTION_FAILURE);
 }

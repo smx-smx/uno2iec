@@ -62,6 +62,21 @@ cc_library(
 )
 
 cc_library(
+    name = "image_drive_d64",
+    srcs = [
+        "image_drive_d64.cc",
+    ],
+    hdrs = [
+        "image_drive_d64.h",
+    ],
+    deps = [
+        ":drive_interface",
+        ":utils",
+        "@boost//:format",
+    ],
+)
+
+cc_library(
     name = "cbm1541_drive",
     srcs = [
         "cbm1541_drive.cc",

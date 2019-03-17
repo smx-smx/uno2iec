@@ -18,8 +18,7 @@ public:
   // this method won't put logical structure such as a valid BAM or directory
   // onto the disc. The num_sectors value determines how many sectors should
   // be formatted. C64 floppy discs may contain up to 41 tracks, but the
-  // standard
-  // is 35 tracks. Returns true if successful, sets status otherwise.
+  // standard is 35 tracks. Returns true if successful, sets status otherwise.
   virtual bool FormatDiscLowLevel(size_t num_sectors, IECStatus *status) = 0;
 
   // Determine and return the number of sectors available on the current disc.

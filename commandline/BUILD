@@ -76,6 +76,19 @@ cc_library(
     ],
 )
 
+cc_test(
+    name = "image_drive_d64_test",
+    srcs = [
+        "image_drive_d64_test.cc",
+    ],
+    deps = [
+        ":image_drive_d64",
+        "@boost//:filesystem",
+        "@boost//:format",
+        "@com_github_google_googletest//:gtest_main",
+    ],
+)
+
 cc_library(
     name = "cbm1541_drive",
     srcs = [

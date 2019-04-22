@@ -17,7 +17,7 @@ public:
   ~ImageDriveD64();
 
   bool FormatDiscLowLevel(size_t num_tracks, IECStatus *status) override;
-  size_t GetNumSectors() override;
+  bool GetNumSectors(size_t *num_sectors, IECStatus *status) override;
   bool ReadSector(size_t sector_number, std::string *content,
                   IECStatus *status) override;
   bool WriteSector(size_t sector_number, const std::string &content,
@@ -27,6 +27,9 @@ private:
   // Open the disc image if it isn't already open. In case of an error,
   // returns false and sets status.
   bool OpenDiscImage(IECStatus *status);
+
+  // Seek to the specified sector, which is expected to exist.
+  bool SeekToSector(size_t sector_number, IECStatus *status);
 
   // Path to the disc image we're operating on.
   std::string image_path_;

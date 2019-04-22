@@ -12,6 +12,11 @@
 
 class DriveInterface {
 public:
+  enum {
+    // Number of bytes per sector.
+    kNumBytesPerSector = 256
+  };
+
   virtual ~DriveInterface() {}
 
   // Physically formats the disc. Note that depending on the implementation,
@@ -21,8 +26,9 @@ public:
   // standard is 35 tracks. Returns true if successful, sets status otherwise.
   virtual bool FormatDiscLowLevel(size_t num_sectors, IECStatus *status) = 0;
 
-  // Determine and return the number of sectors available on the current disc.
-  virtual size_t GetNumSectors() = 0;
+  // Determine and set *num_sectors to the number of sectors available on the
+  // current disc. Returns true if successful, sets status otherwise.
+  virtual bool GetNumSectors(size_t *num_sectors, IECStatus *status) = 0;
 
   // Read the sector specified by sector_number into *content. Returns true if
   // successful, sets status otherwise.

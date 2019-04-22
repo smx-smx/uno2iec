@@ -21,7 +21,7 @@ public:
   ~CBM1541Drive();
 
   bool FormatDiscLowLevel(size_t num_tracks, IECStatus *status) override;
-  size_t GetNumSectors() override;
+  bool GetNumSectors(size_t *num_sectors, IECStatus *status) override;
   bool ReadSector(size_t sector_number, std::string *content,
                   IECStatus *status) override;
   bool WriteSector(size_t sector_number, const std::string &content,

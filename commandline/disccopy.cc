@@ -15,6 +15,7 @@
 #include "boost/program_options/variables_map.hpp"
 #include "cbm1541_drive.h"
 #include "iec_host_lib.h"
+#include "image_drive_d64.h"
 #include "utils.h"
 
 namespace po = boost::program_options;
@@ -104,25 +105,20 @@ int main(int argc, char *argv[]) {
   }
 
   std::cout << "Opening source '" << source << "'." << std::endl;
-  int fd = open(source.c_str(), O_RDONLY);
-  if (fd == -1) {
-    std::cout << "Error opening file: " << strerror(errno) << std::endl;
-    return 1;
-  }
-
-  std::cout << "Opened file." << std::endl;
-
-  BufferedReadWriter reader(fd);
+  std::unique_ptr<ImageDriveD64> reader =
+      std::make_unique<ImageDriveD64>(source, /*read_only=*/true);
 
   // Copy the entire disc.
-  for (unsigned int s = 0;; ++s) {
+  size_t num_sectors = 0;
+  if (!reader->GetNumSectors(&num_sectors, &status)) {
+    std::cout << "Failed to retrieve number of sectors: " << status.message
+              << std::endl;
+    return 1;
+  }
+  for (unsigned int s = 0; s < num_sectors; ++s) {
     std::string current_sector;
-    if (!reader.ReadUpTo(256, 256, &current_sector, &status)) {
-      if (status.status_code == IECStatus::END_OF_FILE) {
-        // We're done reading this image.
-        break;
-      }
-      std::cout << "Failed reading from file: " << status.message << std::endl;
+    if (!reader->ReadSector(s, &current_sector, &status)) {
+      std::cout << "ReadSector: " << status.message << std::endl;
       return 1;
     }
 
@@ -173,8 +169,6 @@ int main(int argc, char *argv[]) {
       }
     }
   }
-
-  close(fd);
 
   // Get the final result.
   if (!connection->ReadFromChannel(target, 15, &response, &status)) {

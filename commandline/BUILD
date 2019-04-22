@@ -134,6 +134,7 @@ cc_binary(
         ":cbm1541_drive",
         ":drive_interface",
         ":iec_host_lib",
+        ":image_drive_d64",
         "@boost//:format",
         "@boost//:program_options",
     ],

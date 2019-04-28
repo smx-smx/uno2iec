@@ -82,12 +82,46 @@ bool CBM1541Drive::GetNumSectors(size_t *num_sectors, IECStatus *status) {
 
 bool CBM1541Drive::ReadSector(size_t sector_number, std::string *content,
                               IECStatus *status) {
+  unsigned int track = 1;
+  unsigned int sector = 0;
+  GetTrackSector(sector_number, &track, &sector);
+  if (track > kMaxTrackNumber) {
+    SetError(
+        IECStatus::INVALID_ARGUMENT,
+        (boost::format("not trying to read from track %u as it might cause "
+                       "hardware damage") %
+         track)
+            .str(),
+        status);
+    return false;
+  }
+
   if (!SetFirmwareState(FW_CUSTOM_READ_WRITE_CODE, status))
     return false;
   if (!InitDirectAccessChannel(status))
     return false;
 
-  return false;
+  std::string request =
+      (boost::format("U1:%u 0 %u %u") % da_chan_ % track % sector).str();
+  if (!bus_conn_->WriteToChannel(device_number_, 15, request, status)) {
+    return false;
+  }
+
+  // Read sector content.
+  if (!bus_conn_->ReadFromChannel(device_number_, da_chan_, content, status)) {
+    return false;
+  }
+
+  // Get the result for the write command.
+  std::string response;
+  if (!bus_conn_->ReadFromChannel(device_number_, 15, &response, status)) {
+    return false;
+  }
+  if (response != kOKResponse) {
+    SetError(IECStatus::DRIVE_ERROR, response, status);
+    return false;
+  }
+  return true;
 }
 
 bool CBM1541Drive::WriteSector(size_t sector_number, const std::string &content,

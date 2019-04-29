@@ -55,6 +55,10 @@ private:
   // Initialize direct access channel if it hasn't been initialized yet.
   bool InitDirectAccessChannel(IECStatus *status);
 
+  // Open the specified channel, associate it with buffer and set the buffer
+  // pointer to zero. Returns true if successful, sets status otherwise.
+  bool OpenChannelWithBuffer(int channel, int buffer, IECStatus *status);
+
   // A pointer to the bus we'll be using to talk to the physical device.
   IECBusConnection *bus_conn_;
 
@@ -70,9 +74,12 @@ private:
   };
   static const std::map<FirmwareState, CustomFirmwareFragment> fw_fragment_map_;
 
-  // Direct access channel to use for reading / writing sector content.
+  // Direct access channel to use for writing sector content.
   // Initialized lazily by InitDirectAccessChannel().
-  int da_chan_ = -1;
+  int write_da_chan_ = -1;
+  // Direct access channel to use for reading sector content.
+  // Initialized lazily by InitDirectAccessChannel().
+  int read_da_chan_ = -1;
 };
 
 #endif // CBM1541_DRIVE_H

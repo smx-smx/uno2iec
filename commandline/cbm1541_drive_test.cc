@@ -113,6 +113,12 @@ TEST_F(CBM1541DriveTest, WriteSectorTest) {
   EXPECT_CALL(conn, WriteToChannel(8, 15, StrEq("B-P:2 0"), &status))
       .Times(1)
       .WillOnce(Return(true));
+  EXPECT_CALL(conn, OpenChannel(8, 3, "#3", &status))
+      .Times(1)
+      .WillOnce(Return(true));
+  EXPECT_CALL(conn, WriteToChannel(8, 15, StrEq("B-P:3 0"), &status))
+      .Times(1)
+      .WillOnce(Return(true));
 
   std::string content(256, 0x42);
   // Expect sector content to be written to our DA channel.
@@ -190,6 +196,7 @@ TEST_F(CBM1541DriveTest, WriteSectorTest) {
 
   // The destructor of our CBM1541Drive will call CloseChannel.
   EXPECT_CALL(conn, CloseChannel(8, 2, _)).Times(1).WillOnce(Return(true));
+  EXPECT_CALL(conn, CloseChannel(8, 3, _)).Times(1).WillOnce(Return(true));
 }
 
 TEST_F(CBM1541DriveTest, ReadSectorTest) {
@@ -213,6 +220,12 @@ TEST_F(CBM1541DriveTest, ReadSectorTest) {
   EXPECT_CALL(conn, WriteToChannel(8, 15, StrEq("B-P:2 0"), &status))
       .Times(1)
       .WillOnce(Return(true));
+  EXPECT_CALL(conn, OpenChannel(8, 3, "#3", &status))
+      .Times(1)
+      .WillOnce(Return(true));
+  EXPECT_CALL(conn, WriteToChannel(8, 15, StrEq("B-P:3 0"), &status))
+      .Times(1)
+      .WillOnce(Return(true));
 
   // We expect a read sector (U1) command.
   // TODO(aeckleder): We want to use a custom sector read here.
@@ -223,7 +236,7 @@ TEST_F(CBM1541DriveTest, ReadSectorTest) {
 
   std::string content(256, 0x42);
   // Expect sector content to be read from our DA channel.
-  EXPECT_CALL(conn, ReadFromChannel(8, 2, _, &status))
+  EXPECT_CALL(conn, ReadFromChannel(8, 3, _, &status))
       .Times(1)
       .WillOnce(DoAll(SetArgPointee<2>(content), Return(true)));
 
@@ -242,7 +255,7 @@ TEST_F(CBM1541DriveTest, ReadSectorTest) {
       .WillOnce(Return(true));
 
   // Expect sector content to be read from our DA channel.
-  EXPECT_CALL(conn, ReadFromChannel(8, 2, _, &status))
+  EXPECT_CALL(conn, ReadFromChannel(8, 3, _, &status))
       .Times(1)
       .WillOnce(DoAll(SetArgPointee<2>(content), Return(true)));
 
@@ -280,7 +293,7 @@ TEST_F(CBM1541DriveTest, ReadSectorTest) {
       .WillOnce(Return(true));
 
   // Expect sector content to be read from our DA channel.
-  EXPECT_CALL(conn, ReadFromChannel(8, 2, _, &status))
+  EXPECT_CALL(conn, ReadFromChannel(8, 3, _, &status))
       .Times(1)
       .WillOnce(DoAll(SetArgPointee<2>(content), Return(true)));
 
@@ -301,7 +314,7 @@ TEST_F(CBM1541DriveTest, ReadSectorTest) {
       .Times(1)
       .WillOnce(Return(true));
 
-  EXPECT_CALL(conn, ReadFromChannel(8, 2, _, &status))
+  EXPECT_CALL(conn, ReadFromChannel(8, 3, _, &status))
       .Times(1)
       .WillOnce(DoAll(SetArgPointee<3>(failure_status), Return(false)));
   EXPECT_FALSE(drive.ReadSector(42, &read_content, &status));
@@ -309,4 +322,5 @@ TEST_F(CBM1541DriveTest, ReadSectorTest) {
 
   // The destructor of our CBM1541Drive will call CloseChannel.
   EXPECT_CALL(conn, CloseChannel(8, 2, _)).Times(1).WillOnce(Return(true));
+  EXPECT_CALL(conn, CloseChannel(8, 3, _)).Times(1).WillOnce(Return(true));
 }

@@ -20,8 +20,9 @@ static const size_t kFormatEntryPoint = 0x503;
 
 static const size_t kNumBytesPerSector = 0x100;
 
-// The direct access channel to use.
-static const int kDirectAccessChannel = 2;
+// The direct access channels to use.
+static const int kWriteDirectAccessChannel = 2;
+static const int kReadDirectAccessChannel = 3;
 
 // We won't allow trying to access a track higher than this as it might damage
 // the hardware.
@@ -39,14 +40,19 @@ CBM1541Drive::CBM1541Drive(IECBusConnection *bus_conn, char device_number)
       fw_state_(FW_NO_CUSTOM_CODE) {}
 
 CBM1541Drive::~CBM1541Drive() {
-  if (da_chan_ != -1) {
-    // Close direct access channel if it has been initialized.
-    // Ignore the result of this operation. It shouldn't fail, but if it
-    // does, there's nothing we can (and should) beyond destroying ourselves.
-    // TODO(aeckleder): Log any error that occurs here.
+  // Close direct access channels that have been initialized.
+  // Ignore the result of this operation. It shouldn't fail, but if it
+  // does, there's nothing we can (and should) beyond destroying ourselves.
+  // TODO(aeckleder): Log any error that occurs here.
+  if (write_da_chan_ != -1) {
     IECStatus status;
-    bus_conn_->CloseChannel(device_number_, da_chan_, &status);
-    da_chan_ = -1;
+    bus_conn_->CloseChannel(device_number_, write_da_chan_, &status);
+    write_da_chan_ = -1;
+  }
+  if (read_da_chan_ != -1) {
+    IECStatus status;
+    bus_conn_->CloseChannel(device_number_, read_da_chan_, &status);
+    read_da_chan_ = -1;
   }
 }
 
@@ -102,13 +108,14 @@ bool CBM1541Drive::ReadSector(size_t sector_number, std::string *content,
     return false;
 
   std::string request =
-      (boost::format("U1:%u 0 %u %u") % da_chan_ % track % sector).str();
+      (boost::format("U1:%u 0 %u %u") % read_da_chan_ % track % sector).str();
   if (!bus_conn_->WriteToChannel(device_number_, 15, request, status)) {
     return false;
   }
 
   // Read sector content.
-  if (!bus_conn_->ReadFromChannel(device_number_, da_chan_, content, status)) {
+  if (!bus_conn_->ReadFromChannel(device_number_, read_da_chan_, content,
+                                  status)) {
     return false;
   }
 
@@ -153,7 +160,8 @@ bool CBM1541Drive::WriteSector(size_t sector_number, const std::string &content,
     return false;
 
   // Write sector content to the buffer.
-  if (!bus_conn_->WriteToChannel(device_number_, da_chan_, content, status)) {
+  if (!bus_conn_->WriteToChannel(device_number_, write_da_chan_, content,
+                                 status)) {
     return false;
   }
 
@@ -253,22 +261,31 @@ bool CBM1541Drive::WriteMemory(unsigned short int target_address,
 }
 
 bool CBM1541Drive::InitDirectAccessChannel(IECStatus *status) {
-  // We already have a direct access channel.
-  if (da_chan_ != -1)
-    return true;
+  if (write_da_chan_ == -1) {
+    if (!OpenChannelWithBuffer(kWriteDirectAccessChannel, 1, status)) {
+      return false;
+    }
+    write_da_chan_ = kWriteDirectAccessChannel;
+  }
+  if (read_da_chan_ == -1) {
+    if (!OpenChannelWithBuffer(kReadDirectAccessChannel, 3, status)) {
+      return false;
+    }
+    read_da_chan_ = kReadDirectAccessChannel;
+  }
+  return true;
+}
 
-  // Open a direct access channel associated with buffer 1 (0x400-0x4ff).
-  if (!bus_conn_->OpenChannel(device_number_, kDirectAccessChannel, "#1",
-                              status)) {
+bool CBM1541Drive::OpenChannelWithBuffer(int channel, int buffer,
+                                         IECStatus *status) {
+  if (!bus_conn_->OpenChannel(device_number_, channel,
+                              (boost::format("#%u") % buffer).str(), status)) {
     return false;
   }
-  da_chan_ = kDirectAccessChannel;
-
   // Set buffer pointer to beginning of buffer.
-  auto cmd = boost::format("B-P:%u 0") % da_chan_;
+  auto cmd = boost::format("B-P:%u 0") % channel;
   if (!bus_conn_->WriteToChannel(device_number_, 15, cmd.str(), status)) {
     return false;
   }
-
   return true;
 }

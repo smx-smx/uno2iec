@@ -128,44 +128,20 @@ int main(int argc, char *argv[]) {
     }
 
     if (verify) {
-      // TODO(aeckleder): Remove this and read using the drive interface.
-      const int da_chan = 2;
-      unsigned int track = 1;
-      unsigned int sector = 0;
-      CBM1541Drive::GetTrackSector(s, &track, &sector);
-
-      // Verify buffer content.
-      auto cmd = boost::format("U1:%u 0 %u %u") % da_chan % track % sector;
-      std::cout << "cmd=" << cmd << std::endl;
-      if (!connection->WriteToChannel(target, 15, cmd.str(), &status)) {
-        std::cout << "WriteToChannel: " << status.message << std::endl;
-        return 1;
-      }
-      // Read the current sector from the buffer.
       std::string verify_content;
-      if (!connection->ReadFromChannel(target, da_chan, &verify_content,
-                                       &status)) {
-        std::cout << "ReadFromChannel: " << status.message << std::endl;
+      if (!drive->ReadSector(s, &verify_content, &status)) {
+        std::cout << "ReadSector: " << status.message << std::endl;
         return 1;
       }
 
       if (current_sector != verify_content) {
-        std::cout << "Verification failed:" << std::endl;
+        std::cout << "Verification failed (sector " << s << "):" << std::endl;
         std::cout << "Original sector (" << current_sector.size()
                   << " bytes):" << std::endl;
         std::cout << BytesToHex(current_sector) << std::endl;
         std::cout << "Read sector (" << verify_content.size()
                   << " bytes):" << std::endl;
         std::cout << BytesToHex(verify_content) << std::endl;
-      }
-
-      // Position the buffer pointer in preparation for the next write
-      // (reading from the same buffer produces an off-by-one error).
-      cmd = boost::format("B-P:%u 0") % da_chan;
-      std::cout << "cmd=" << cmd << std::endl;
-      if (!connection->WriteToChannel(target, 15, cmd.str(), &status)) {
-        std::cout << "WriteToChannel: " << status.message << std::endl;
-        return 1;
       }
     }
   }

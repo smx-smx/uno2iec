@@ -388,8 +388,45 @@ static bool ConfigureSerial(int fd, int speed, IECStatus *status) {
     SetErrorFromErrno(IECStatus::CONNECTION_FAILURE, "tcgetattr", status);
     return false;
   }
-  cfsetospeed(&tty, (speed_t)speed);
-  cfsetispeed(&tty, (speed_t)speed);
+  speed_t speed_constant = B0;
+#define SPEED_MAP(s)                                                           \
+  case s:                                                                      \
+    speed_constant = B##s;                                                     \
+    break
+  switch (speed) {
+    SPEED_MAP(0);
+    SPEED_MAP(50);
+    SPEED_MAP(75);
+    SPEED_MAP(110);
+    SPEED_MAP(134);
+    SPEED_MAP(150);
+    SPEED_MAP(200);
+    SPEED_MAP(300);
+    SPEED_MAP(600);
+    SPEED_MAP(1200);
+    SPEED_MAP(2400);
+    SPEED_MAP(4800);
+    SPEED_MAP(9600);
+    SPEED_MAP(19200);
+    SPEED_MAP(38400);
+    SPEED_MAP(57600);
+    SPEED_MAP(115200);
+    SPEED_MAP(230400);
+  default:
+    SetError(IECStatus::CONNECTION_FAILURE,
+             (boost::format("Unknown speed setting: #%u baud") % speed).str(),
+             status);
+    return false;
+  }
+#undef SPEED_MAP
+  if (cfsetospeed(&tty, speed_constant) == -1) {
+    SetErrorFromErrno(IECStatus::CONNECTION_FAILURE, "cfsetospeed", status);
+    return false;
+  }
+  if (cfsetispeed(&tty, speed_constant) == -1) {
+    SetErrorFromErrno(IECStatus::CONNECTION_FAILURE, "cfsetispeed", status);
+    return false;
+  }
 
   tty.c_cflag |= (CLOCAL | CREAD); /* ignore modem controls */
   tty.c_cflag &= ~CSIZE;
@@ -426,8 +463,8 @@ IECBusConnection *IECBusConnection::Create(const std::string &device_file,
     return nullptr;
   }
 
-  // Configure serial port to 9600 baud to make the Arduino reset.
-  if (!ConfigureSerial(fd, 9600, status)) {
+  // Configure serial port to 1200 baud to make the Arduino reset.
+  if (!ConfigureSerial(fd, 1200, status)) {
     return nullptr;
   }
 

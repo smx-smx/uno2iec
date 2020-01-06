@@ -12,8 +12,12 @@ static const char kOKResponse[] = "00, OK,00,00\r";
 // Max amount of data for a single M-W command is 35 bytes.
 static const size_t kMaxMWSize = 35;
 
-// We skip the first three bytes, because they're a jmp into the write job.
-static const size_t kWriteBlockEntryPoint = 0x503;
+// We skip the first three bytes, because they're a jmp into the read/write job.
+static const size_t kReadWriteBlockEntryPoint = 0x503;
+
+// The third parameter to the read/write job. If zero, read. If non-zero, write.
+static const size_t kReadBlockOption = 0x00;
+static const size_t kWriteBlockOption = 0x01;
 
 // We skip the first three bytes, because they're a jmp into the format job.
 static const size_t kFormatEntryPoint = 0x503;
@@ -167,10 +171,11 @@ bool CBM1541Drive::WriteSector(size_t sector_number, const std::string &content,
 
   // Write the buffer to disc.
   std::string request = "M-E";
-  request.append(1, char(kWriteBlockEntryPoint & 0xff));
-  request.append(1, char(kWriteBlockEntryPoint >> 8));
+  request.append(1, char(kReadWriteBlockEntryPoint & 0xff));
+  request.append(1, char(kReadWriteBlockEntryPoint >> 8));
   request.append(1, char(track));
   request.append(1, char(sector));
+  request.append(1, char(kWriteBlockOption));
   if (!bus_conn_->WriteToChannel(device_number_, 15, request, status)) {
     return false;
   }

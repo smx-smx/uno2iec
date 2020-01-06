@@ -6,10 +6,10 @@
 	; Some config values. We're not really that flexible.
 	; We expect track and sector number to be specified after the M-E command.
 
-	block_data_buffer_start = $0400 	; Data buffer to write to disc.
+	block_data_buffer_start = $0400 	; Data buffer to read to / write from.
 
 	; Entry point for execute buffer. The actual main program starts below.
-	jmp write_block_job
+	jmp read_or_write_block_job
 
 	; Main program (entry point for M-E).
 	lda input_buffer + 0x05		; Read from input buffer, offset 5 (after M-E<mem_lo><mem_hi>).
@@ -29,13 +29,19 @@ ok:
 	rts
 
 
-write_block_job:
+read_or_write_block_job:
 	; We started in the wrong buffer. Change to the buffer whose data should be written.
 	lda #<block_data_buffer_start
 	sta current_buffer_start_low
 	lda #>block_data_buffer_start
 	sta current_buffer_start_high
 
+	; Figure out whether to read or write (offset 7 after M-E<mem_lo><mem_hi><track><sector>).
+	lda input_buffer + 0x07
+	beq read_sector 	; Zero: Read sector, write sector otherwise.
+
+	; We're writing.
+	
 	jsr format_calculate_checksum	
 	sta sector_data_checksum
 
@@ -108,5 +114,11 @@ wait_last_content_byte_loop:
 
 	; TODO(aeckleder): Should we verify what was written here?
 
+	lda #$01
+	jmp dc_end_job_loop_with_status
+
+read_sector:
+
+	; Done reading.
 	lda #$01
 	jmp dc_end_job_loop_with_status

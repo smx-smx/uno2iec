@@ -1,8 +1,8 @@
 #include "cbm1541_drive.h"
 
 #include "boost/format.hpp"
-#include "gmock/gmock.h"
 #include "iec_host_lib.h"
+#include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
 using ::testing::_;
@@ -227,10 +227,8 @@ TEST_F(CBM1541DriveTest, ReadSectorTest) {
       .Times(1)
       .WillOnce(Return(true));
 
-  // We expect a read sector (U1) command.
-  // TODO(aeckleder): We want to use a custom sector read here.
-  // Fix this test once we have it.
-  EXPECT_CALL(conn, WriteToChannel(8, 15, StartsWith("U1:"), &status))
+  // Finally, we expect a single memory execute.
+  EXPECT_CALL(conn, WriteToChannel(8, 15, StartsWith("M-E"), &status))
       .Times(1)
       .WillOnce(Return(true));
 
@@ -247,10 +245,8 @@ TEST_F(CBM1541DriveTest, ReadSectorTest) {
   // Done with one call, prepare for the next one.
   ::testing::Mock::VerifyAndClearExpectations(&conn);
 
-  // We expect a read sector (U1) command.
-  // TODO(aeckleder): We want to use a custom sector read here.
-  // Fix this test once we have it.
-  EXPECT_CALL(conn, WriteToChannel(8, 15, StartsWith("U1:"), &status))
+  // We expect a single memory execute.
+  EXPECT_CALL(conn, WriteToChannel(8, 15, StartsWith("M-E"), &status))
       .Times(1)
       .WillOnce(Return(true));
 
@@ -273,10 +269,8 @@ TEST_F(CBM1541DriveTest, ReadSectorTest) {
   // We expect connection failures to be passed through.
   IECStatus failure_status;
   failure_status.status_code = IECStatus::IEC_CONNECTION_FAILURE;
-  // We expect a read sector (U1) command.
-  // TODO(aeckleder): We want to use a custom sector read here.
-  // Fix this test once we have it.
-  EXPECT_CALL(conn, WriteToChannel(8, 15, StartsWith("U1:"), &status))
+  // We expect a memory execute.
+  EXPECT_CALL(conn, WriteToChannel(8, 15, StartsWith("M-E"), &status))
       .Times(1)
       .WillOnce(DoAll(SetArgPointee<3>(failure_status), Return(false)));
   EXPECT_FALSE(drive.ReadSector(42, &read_content, &status));
@@ -285,10 +279,7 @@ TEST_F(CBM1541DriveTest, ReadSectorTest) {
   // Done with one call, prepare for the next one.
   ::testing::Mock::VerifyAndClearExpectations(&conn);
 
-  // We expect a read sector (U1) command.
-  // TODO(aeckleder): We want to use a custom sector read here.
-  // Fix this test once we have it.
-  EXPECT_CALL(conn, WriteToChannel(8, 15, StartsWith("U1:"), &status))
+  EXPECT_CALL(conn, WriteToChannel(8, 15, StartsWith("M-E"), &status))
       .Times(1)
       .WillOnce(Return(true));
 
@@ -307,10 +298,7 @@ TEST_F(CBM1541DriveTest, ReadSectorTest) {
   // Done with one call, prepare for the next one.
   ::testing::Mock::VerifyAndClearExpectations(&conn);
 
-  // We expect a read sector (U1) command.
-  // TODO(aeckleder): We want to use a custom sector read here.
-  // Fix this test once we have it.
-  EXPECT_CALL(conn, WriteToChannel(8, 15, StartsWith("U1:"), &status))
+  EXPECT_CALL(conn, WriteToChannel(8, 15, StartsWith("M-E"), &status))
       .Times(1)
       .WillOnce(Return(true));
 

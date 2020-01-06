@@ -21,6 +21,11 @@
 	dc_wait_for_sync = $f556     		; Wait for sync signal.
 	dc_end_of_job_loop = $f99c   		; End of job loop, process head moves (jmp).
 	dc_end_job_loop_with_status = $f969 	; End the job loop with status in a (jmp).
+	dc_search_block_header = $f510          ; Search block header matching track/sector for buffer.
+	dc_search_block_header_and_sync = $f50a ; Like above, but wait for sync signal.
+
+	read_convert_gcr_to_binary = $f8e0      ; Convert buffer + aux space to binary.
+						; Aux space has last 70 bytes of sector.
 
 	; DC Job codes.
 
@@ -68,11 +73,15 @@
 				       ; while positioning the head. Also used for temporarily storing
 				       ; an offset into the sector header while formatting. 
 
+
+	data_block_signature_byte = $38 ; Default is $07.
 	sector_header_signature_byte = $39 ; Default is $08.
 
 	sector_data_checksum = $3a  	; Stores checksum over sector data.
 
 	current_track_sector_count = $43 ; Number of sectors on current track.
+
+        data_block_identifier = $47 ; Current data block identifier (constant, initialized during reset).
 
 	number_half_tracks_to_seek = $4a ; Number of halftracks to move during seek.
 
@@ -93,6 +102,9 @@
 	bam_version_code = $0101	     ; Contains the BAM version code after disc is initialized.
 
 	input_buffer = $0200		     ; This is where our command input ends up.
+
+	channel_buffer_start = $023e         ; Table of start of current data for each channel.
+	channel_buffer_last = $0244          ; Table of last valid data byte for each channel.
 
 	bam_dirty_flag = $0251		     ; If != 0x00, the BAM is modified and needs to be written.
 

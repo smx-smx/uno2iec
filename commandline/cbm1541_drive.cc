@@ -111,8 +111,20 @@ bool CBM1541Drive::ReadSector(size_t sector_number, std::string *content,
   if (!InitDirectAccessChannel(status))
     return false;
 
-  std::string request =
-      (boost::format("U1:%u 0 %u %u") % read_da_chan_ % track % sector).str();
+  // Read from disc.
+  std::string request = "M-E";
+  request.append(1, char(kReadWriteBlockEntryPoint & 0xff));
+  request.append(1, char(kReadWriteBlockEntryPoint >> 8));
+  request.append(1, char(track));
+  request.append(1, char(sector));
+  request.append(1, char(kReadBlockOption));
+  if (!bus_conn_->WriteToChannel(device_number_, 15, request, status)) {
+    return false;
+  }
+
+  // Reposition buffer pointer
+  // TODO(aeckleder): Fix block read code to no longer require this.
+  request = (boost::format("B-P:%u 0") % read_da_chan_).str();
   if (!bus_conn_->WriteToChannel(device_number_, 15, request, status)) {
     return false;
   }
@@ -123,7 +135,7 @@ bool CBM1541Drive::ReadSector(size_t sector_number, std::string *content,
     return false;
   }
 
-  // Get the result for the write command.
+  // Get the result for the read command.
   std::string response;
   if (!bus_conn_->ReadFromChannel(device_number_, 15, &response, status)) {
     return false;

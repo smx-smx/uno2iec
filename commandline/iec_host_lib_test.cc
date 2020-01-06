@@ -103,8 +103,8 @@ protected:
       {
         std::lock_guard<std::mutex> lock(request_response_map_m_);
         auto it = request_response_map_.find(r);
-        EXPECT_TRUE(it != request_response_map_.end()) << "Unknown request: "
-                                                       << r;
+        EXPECT_TRUE(it != request_response_map_.end())
+            << "Unknown request: " << r;
         if (it != request_response_map_.end()) {
           response = it->second;
         }

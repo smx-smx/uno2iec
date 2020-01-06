@@ -200,7 +200,7 @@ bool IECBusConnection::CloseChannel(char device_number, char channel,
   }
 }
 
-bool IECBusConnection::Initialize(IECStatus *status) {  
+bool IECBusConnection::Initialize(IECStatus *status) {
   std::string connection_string;
   for (int i = 0; i < kNumRetries; ++i) {
     if (!arduino_writer_->ReadTerminatedString('\r', kMaxLength,
@@ -397,12 +397,12 @@ static bool ConfigureSerial(int fd, int speed, IECStatus *status) {
   tty.c_cflag &= ~PARENB;  /* no parity bit */
   tty.c_cflag &= ~CSTOPB;  /* only need 1 stop bit */
   tty.c_cflag &= ~CRTSCTS; /* no hardware flowcontrol */
-  
+
   /* setup for non-canonical mode */
   tty.c_iflag &=
       ~(IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL | IXON);
   tty.c_lflag &= ~(ECHO | ECHONL | ICANON | ISIG | IEXTEN);
-    
+
   tty.c_oflag &= ~OPOST;
 
   /* fetch bytes as they become available */
@@ -430,18 +430,19 @@ IECBusConnection *IECBusConnection::Create(const std::string &device_file,
   if (!ConfigureSerial(fd, 9600, status)) {
     return nullptr;
   }
-  
-  // Wait for the Arduino to reset, then flush everything that was sent or received.
-  usleep(1000*1000);
+
+  // Wait for the Arduino to reset, then flush everything that was sent or
+  // received.
+  usleep(1000 * 1000);
 
   // Now configure to the desired speed.
   if (!ConfigureSerial(fd, speed, status)) {
     return nullptr;
-  }  
+  }
   if (tcflush(fd, TCIFLUSH) == -1) {
     SetErrorFromErrno(IECStatus::CONNECTION_FAILURE, "tcflush", status);
     return nullptr;
   }
-  
+
   return Create(fd, log_callback, status);
 }

@@ -7,7 +7,6 @@
 #include <sys/types.h>
 
 #include "assembly/format_h.h"
-#include "assembly/write_block_h.h"
 #include "boost/format.hpp"
 #include "boost/program_options/cmdline.hpp"
 #include "boost/program_options/options_description.hpp"

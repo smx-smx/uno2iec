@@ -94,7 +94,7 @@ cc_library(
     srcs = [
         "cbm1541_drive.cc",
         "//assembly:format_h",
-        "//assembly:write_block_h",
+        "//assembly:rw_block_h",
     ],
     hdrs = [
         "cbm1541_drive.h",
@@ -127,7 +127,7 @@ cc_binary(
     srcs = [
         "disccopy.cc",
         "//assembly:format_h",
-        "//assembly:write_block_h",
+        "//assembly:rw_block_h",
     ],
     linkopts = ["-lpthread"],
     deps = [

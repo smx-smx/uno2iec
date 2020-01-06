@@ -200,13 +200,7 @@ bool IECBusConnection::CloseChannel(char device_number, char channel,
   }
 }
 
-bool IECBusConnection::Initialize(IECStatus *status) {
-  // Write a completely unmotivated '\r' to the serial bus.
-  // This helps work around an issue with some USB to serial chips that
-  // won't use the correct settings until the first character is sent.
-  if (!arduino_writer_->WriteString("\r", status)) {
-    return false;
-  }
+bool IECBusConnection::Initialize(IECStatus *status) {  
   std::string connection_string;
   for (int i = 0; i < kNumRetries; ++i) {
     if (!arduino_writer_->ReadTerminatedString('\r', kMaxLength,
@@ -388,19 +382,11 @@ IECBusConnection *IECBusConnection::Create(int arduino_fd,
   return conn.release();
 }
 
-IECBusConnection *IECBusConnection::Create(const std::string &device_file,
-                                           int speed, LogCallback log_callback,
-                                           IECStatus *status) {
-  int fd = open(device_file.c_str(), O_RDWR | O_NONBLOCK);
-  if (fd == -1) {
-    SetErrorFromErrno(IECStatus::CONNECTION_FAILURE,
-                      "open(\"" + device_file + "\")", status);
-    return nullptr;
-  }
+static bool ConfigureSerial(int fd, int speed, IECStatus *status) {
   struct termios tty;
   if (tcgetattr(fd, &tty) == -1) {
     SetErrorFromErrno(IECStatus::CONNECTION_FAILURE, "tcgetattr", status);
-    return nullptr;
+    return false;
   }
   cfsetospeed(&tty, (speed_t)speed);
   cfsetispeed(&tty, (speed_t)speed);
@@ -411,11 +397,12 @@ IECBusConnection *IECBusConnection::Create(const std::string &device_file,
   tty.c_cflag &= ~PARENB;  /* no parity bit */
   tty.c_cflag &= ~CSTOPB;  /* only need 1 stop bit */
   tty.c_cflag &= ~CRTSCTS; /* no hardware flowcontrol */
-
+  
   /* setup for non-canonical mode */
   tty.c_iflag &=
       ~(IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL | IXON);
   tty.c_lflag &= ~(ECHO | ECHONL | ICANON | ISIG | IEXTEN);
+    
   tty.c_oflag &= ~OPOST;
 
   /* fetch bytes as they become available */
@@ -424,7 +411,37 @@ IECBusConnection *IECBusConnection::Create(const std::string &device_file,
 
   if (tcsetattr(fd, TCSANOW, &tty) == -1) {
     SetErrorFromErrno(IECStatus::CONNECTION_FAILURE, "tcsetattr", status);
+    return false;
+  }
+  return true;
+}
+
+IECBusConnection *IECBusConnection::Create(const std::string &device_file,
+                                           int speed, LogCallback log_callback,
+                                           IECStatus *status) {
+  int fd = open(device_file.c_str(), O_RDWR | O_NONBLOCK);
+  if (fd == -1) {
+    SetErrorFromErrno(IECStatus::CONNECTION_FAILURE,
+                      "open(\"" + device_file + "\")", status);
     return nullptr;
   }
+
+  // Configure serial port to 9600 baud to make the Arduino reset.
+  if (!ConfigureSerial(fd, 9600, status)) {
+    return nullptr;
+  }
+  
+  // Wait for the Arduino to reset, then flush everything that was sent or received.
+  usleep(1000*1000);
+
+  // Now configure to the desired speed.
+  if (!ConfigureSerial(fd, speed, status)) {
+    return nullptr;
+  }  
+  if (tcflush(fd, TCIFLUSH) == -1) {
+    SetErrorFromErrno(IECStatus::CONNECTION_FAILURE, "tcflush", status);
+    return nullptr;
+  }
+  
   return Create(fd, log_callback, status);
 }

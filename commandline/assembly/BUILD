@@ -15,10 +15,10 @@ acme_binary(
 )
 
 acme_binary(
-    name = "write_block",
+    name = "rw_block",
     format = "plain",
     srcs = [
-        "write_block.asm"
+        "rw_block.asm"
     ],
     includes = [
         "definitions.asm",
@@ -42,7 +42,7 @@ bin_array(
 )
 
 bin_array(
-    name = "write_block_h",
-    file = ":write_block",
-    symbol = "write_block_bin",
+    name = "rw_block_h",
+    file = ":rw_block",
+    symbol = "rw_block_bin",
 )

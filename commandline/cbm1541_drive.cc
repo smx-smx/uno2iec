@@ -3,7 +3,7 @@
 #include "cbm1541_drive.h"
 
 #include "assembly/format_h.h"
-#include "assembly/write_block_h.h"
+#include "assembly/rw_block_h.h"
 #include "boost/format.hpp"
 
 // Logical OK response.
@@ -33,7 +33,7 @@ const std::map<CBM1541Drive::FirmwareState,
     CBM1541Drive::fw_fragment_map_ = {
         {FW_CUSTOM_FORMATTING_CODE, {format_bin, sizeof(format_bin), 0x500}},
         {FW_CUSTOM_READ_WRITE_CODE,
-         {write_block_bin, sizeof(write_block_bin), 0x500}}};
+         {rw_block_bin, sizeof(rw_block_bin), 0x500}}};
 
 CBM1541Drive::CBM1541Drive(IECBusConnection *bus_conn, char device_number)
     : bus_conn_(bus_conn), device_number_(device_number),

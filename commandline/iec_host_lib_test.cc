@@ -53,9 +53,6 @@ protected:
     IECStatus status;
     BufferedReadWriter writer(pipefd_[1]);
     std::string r;
-    // Read the initial empty line we send prior to reading from the Arduino.
-    EXPECT_TRUE(writer.ReadTerminatedString('\r', 256, &r, &status))
-        << status.message;
     EXPECT_TRUE(writer.WriteString("connect_arduino:3\r", &status))
         << status.message;
     EXPECT_TRUE(writer.ReadTerminatedString('\r', 256, &r, &status))

@@ -62,6 +62,24 @@ cc_library(
 )
 
 cc_library(
+    name = "drive_factory",
+    srcs = [
+        "drive_factory.cc",
+    ],
+    hdrs = [
+        "drive_factory.h",
+    ],
+    deps = [
+        ":cbm1541_drive",
+	":drive_interface",
+        ":iec_host_lib",
+        ":image_drive_d64",
+        ":utils",
+        "@boost//:lexical_cast",
+    ],
+)
+
+cc_library(
     name = "image_drive_d64",
     srcs = [
         "image_drive_d64.cc",
@@ -131,10 +149,9 @@ cc_binary(
     ],
     linkopts = ["-lpthread"],
     deps = [
-        ":cbm1541_drive",
+	":drive_factory",
         ":drive_interface",
         ":iec_host_lib",
-        ":image_drive_d64",
         "@boost//:format",
         "@boost//:program_options",
     ],

@@ -22,6 +22,7 @@ public:
                   IECStatus *status) override;
   bool WriteSector(size_t sector_number, const std::string &content,
                    IECStatus *status) override;
+  bool ReadCommandChannel(std::string *response, IECStatus *status) override;
 
 private:
   // Open the disc image if it isn't already open. In case of an error,

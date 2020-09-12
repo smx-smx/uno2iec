@@ -8,6 +8,8 @@
 #ifndef DRIVE_INTERFACE_H
 #define DRIVE_INTERFACE_H
 
+#include <memory>
+
 #include "utils.h"
 
 class DriveInterface {
@@ -39,6 +41,10 @@ public:
   // successful, sets status otherwise.
   virtual bool WriteSector(size_t sector_number, const std::string &content,
                            IECStatus *status) = 0;
+
+  // Read string from the command channel and set response to the result.
+  // Returns true if successful, sets status otherwise.
+  virtual bool ReadCommandChannel(std::string *response, IECStatus *status) = 0;
 };
 
 #endif // DRIVE_INTERFACE_H

@@ -204,6 +204,12 @@ bool CBM1541Drive::WriteSector(size_t sector_number, const std::string &content,
   return true;
 }
 
+bool CBM1541Drive::ReadCommandChannel(std::string *response,
+                                      IECStatus *status) {
+  // Accessing the command channel is always ok, no open call necessary.
+  return bus_conn_->ReadFromChannel(device_number_, 15, response, status);
+}
+
 void CBM1541Drive::GetTrackSector(unsigned int s, unsigned int *track,
                                   unsigned int *sector) {
   const unsigned int area1_sectors = 357;

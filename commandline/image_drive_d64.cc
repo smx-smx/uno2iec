@@ -82,6 +82,15 @@ bool ImageDriveD64::WriteSector(size_t sector_number,
   return false;
 }
 
+bool ImageDriveD64::ReadCommandChannel(std::string *response,
+                                       IECStatus *status) {
+  bool result = OpenDiscImage(status);
+  if (result) {
+    *response = "Accessing image '" + image_path_ + "'";
+  }
+  return result;
+}
+
 bool ImageDriveD64::SeekToSector(size_t sector_number, IECStatus *status) {
   off_t seek_pos = sector_number * kNumBytesPerSector;
   if (lseek(image_fd_, seek_pos, SEEK_SET) != seek_pos) {

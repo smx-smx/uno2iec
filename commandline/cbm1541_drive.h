@@ -26,6 +26,7 @@ public:
                   IECStatus *status) override;
   bool WriteSector(size_t sector_number, const std::string &content,
                    IECStatus *status) override;
+  bool ReadCommandChannel(std::string *response, IECStatus *status) override;
 
   // GetTrackSector translates from a sector index to corresponding
   // track and (track local) sector number according to a hardcoded

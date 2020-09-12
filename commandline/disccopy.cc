@@ -34,7 +34,7 @@ static std::string BytesToHex(const std::string &input) {
 
 int main(int argc, char *argv[]) {
   std::cout << "IEC Bus disc copy utility." << std::endl
-            << "Copyright (c) 2018 Andreas Eckleder" << std::endl
+            << "Copyright (c) 2020 Andreas Eckleder" << std::endl
             << std::endl;
 
   std::string arduino_device;
@@ -65,6 +65,12 @@ int main(int argc, char *argv[]) {
   if (vm.count("help")) {
     std::cout << desc << std::endl;
     return 1;
+  }
+
+  if (source.empty()) {
+    std::cout << desc << std::endl <<
+      "Required argument --source must be non-empty." << std::endl;
+    return 2;
   }
 
   IECStatus status;

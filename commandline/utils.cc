@@ -43,7 +43,9 @@ void SetError(IECStatus::IECStatusCode status_code, const std::string &context,
 void SetErrorFromErrno(IECStatus::IECStatusCode status_code,
                        const std::string &context, IECStatus *status) {
   SetError(status_code, context, status);
-  status->message = status->message + ": " + strerror(errno);
+  status->message =
+      (boost::format("%s: %s(%u)") % status->message % strerror(errno) % errno)
+          .str();
 }
 
 BufferedReadWriter::BufferedReadWriter(int fd) : fd_(fd) {

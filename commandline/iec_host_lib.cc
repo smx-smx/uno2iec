@@ -40,9 +40,9 @@ static const int kNumRetries = 5;
 // IEC bus, so this special casing should be OK.
 static const int kDeviceNumber = 0;
 
-static const int kAtnPin = 5;
 static const int kDataPin = 3;
 static const int kClockPin = 4;
+static const int kAtnPin = 5;
 static const int kSrqInPin = 6;
 static const int kResetPin = 7;
 

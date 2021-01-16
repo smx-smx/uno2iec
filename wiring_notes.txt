@@ -1,0 +1,11 @@
+The purpose of this file is to document the wiring of the connector cable I built.
+It is probably not useful beyond that, unless you want to use the same color codes:
+
+GND:    gray - Arduino GND
+DATA:   red    - D3
+CLK:    orange - D4
+ATN:    yellow - D5
+SRQ_IN: green  - D6
+RESET:  white  - D7
+
+

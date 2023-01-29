@@ -1,0 +1,50 @@
+<!doctype html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<meta name="author" content="Stefano Moioli">
+		
+		<link rel="stylesheet" href="https://cdn.korzh.com/metroui/v4.5.1/css/metro-all.min.css">
+		<script src="https://cdn.korzh.com/metroui/v4/js/metro.min.js"></script>
+		<script src="dumper.js"></script>
+	</head>
+	<body>
+		<br>
+		<div class="container-fluid">
+			<form method="GET" onsubmit="return false;">
+				<fieldset class="form-group">
+					<label>Filename</label>
+					&nbsp;
+					<input id="filename" type="text" placeholder="Filename"/>
+				</fieldset>
+				<br>
+				<button
+					class="button primary"
+					value="Read"
+					onclick="start();">Read</button>
+				<button
+					id="stop_btn"
+					class="button alert"
+					style="display: none;"
+					onclick="stop();">Stop</button>
+			</form>
+			<br>
+			<div
+				id="progress"
+				data-role="progress"
+				data-value="0"
+				style="width: 80%;"
+			></div>
+			<br>
+			<div>
+				<pre id="outcome"></pre>
+			</div>
+			<br>
+			<footer>
+				<button id="poweroff_btn"
+					class="button alert"
+					onclick="poweroff();">Power Off</button>
+			</footer>
+		</div>
+	</body>
+</html>

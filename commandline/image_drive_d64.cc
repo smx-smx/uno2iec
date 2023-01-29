@@ -78,8 +78,22 @@ bool ImageDriveD64::ReadSector(size_t sector_number, std::string *content,
 
 bool ImageDriveD64::WriteSector(size_t sector_number,
                                 const std::string &content, IECStatus *status) {
-  SetError(IECStatus::UNIMPLEMENTED, "ImageDriveD64::WriteSector", status);
-  return false;
+  
+  if(!OpenDiscImage(status)){
+    return false;
+  }
+  assert(image_fd_ != -1);
+  if (!SeekToSector(sector_number, status)){
+    return false;
+  }
+  ssize_t res = write(image_fd_, &content[0], kNumBytesPerSector);
+  if (res != kNumBytesPerSector){
+    SetErrorFromErrno(
+      IECStatus::DRIVE_ERROR,
+      (boost::format("WriteSector: write returned %u") % res).str(), status);
+    return false;
+  }
+  return true;
 }
 
 bool ImageDriveD64::ReadCommandChannel(std::string *response,
